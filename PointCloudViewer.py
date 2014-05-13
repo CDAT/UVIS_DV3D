@@ -166,10 +166,9 @@ class CPCPlot( DV3DPlot ):
         DV3DPlot.__init__( self, **args  )
         self.ValueChanged = SIGNAL('ValueChanged')
         self.ConfigCmd = SIGNAL('ConfigCmd')
-        self.sliceAxisIndex = 0
+        self.sliceAxisIndex = -1
         self.partitioned_point_cloud = None
         self.point_cloud_overview = None
-        self.volumeThresholdRange = {}
         self.infovisDialog = None
         self.process_mode = ProcessMode.Default
         self.config_mode = ConfigMode.Default
@@ -186,13 +185,15 @@ class CPCPlot( DV3DPlot ):
 #        self.resolutionCounter = Counter()
         self._current_subset_specs = {}
         self.sphere_source = None
-        self.currentSliders = {}
+        self.currentSliders = {} 
+        self.vertVar = 'default'   
         self.addConfigurableSliderFunction( 'zScale', 'z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
         self.addConfigurableSliderFunction( 'pointSize', 'P', label='Point Size', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processPointSizeCommand, range_bounds=[ 1, 12 ], initValue=[ 5, 1 ] )
         self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
         self.addConfigurableSliderFunction( 'thresholding', 'T', label='Thresholding Range', interactionHandler=self.processThresholdRangeCommand )
         self.addConfigurableSliderFunction( 'sliceProp', 'w', label='Slice Thickness', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processSlicePropertiesCommand, range_bounds=[ 0.001, 0.01 ], initValue=[ 0.0025, 0.005 ] )        
         self.addConfigurableSliderFunction( 'opacityScale', 'o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+        self.addConfigurableSliderFunction( 'slicing', 'p', label='Slicing', sliderLabels='Slice Position', interactionHandler=self.processSlicingCommand )
         
      
 #        self.addConfigurableSliderFunction( 'slicing', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
@@ -207,13 +208,16 @@ class CPCPlot( DV3DPlot ):
 #         if (  key == 't'  ): self.toggleTopo()             
 #         return 0
 
-    def updateInteractionState( self, state, altMode=None ): 
-        self.clearInteractions()
+    def updateInteractionState( self, state, altMode=None ):             
         config_funct = DV3DPlot.updateInteractionState( self, state, altMode )
         if ( config_funct <> None ) and (config_funct.type == 'slider'):
             config_funct.processInteractionEvent( [ "InitConfig" ] )
-            for slider_index, label in enumerate( config_funct.sliderLabels ):
-                self.commandeerSlider( slider_index, label, config_funct.range_bounds, config_funct.initial_value[slider_index] )
+            tvals = config_funct.value.getValues()
+            for slider_index in range(2):
+                if slider_index < len(config_funct.sliderLabels):
+                    self.commandeerSlider( slider_index, config_funct.sliderLabels[slider_index], config_funct.range_bounds, tvals[slider_index]  ) # config_funct.initial_value[slider_index] )
+                else:
+                    self.releaseSlider( slider_index )
         self.render()
         
     def processTimerEvent(self, caller, event):
@@ -288,7 +292,7 @@ class CPCPlot( DV3DPlot ):
         self.currentSliders[index] = ( self.process_mode, self.InteractionState, swidget )
         
     def releaseSlider( self, index ):        
-        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, None )  
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
         if swidget: swidget.SetEnabled( 0 ) 
         
     def clearInteractions(self):
@@ -339,47 +343,6 @@ class CPCPlot( DV3DPlot ):
 #            self.refreshPointSize()
             self.low_res_actor.VisibilityOn()  
             
-#        if self.process_mode == ProcessMode.Thresholding:   self.executeCurrentThresholdRange()
-#        if self.process_mode == ProcessMode.Slicing:        self.execCurrentSlice()
-        
-#    def refreshResolution( self ):
-#        self.setPointSize( self.raw_point_size )
-#        downsizeFactor = int( math.ceil( self.getNumberOfPoints() / float( self.downsizeNPointsTarget ) ) ) 
-#        self.pointMask.SetOnRatio( downsizeFactor )
-#        self.pointMask.Modified()
-#        self.threshold_filter.Modified()
-#        self.geometry_filter.Modified()
-                
-             
-    
-#    def recolorPoint3(self, iPtIndex, color ):
-#        if iPtIndex < self.npoints:
-#            iPtId = 3*iPtIndex
-#            for iC, c in enumerate( color ):
-#                self.vtk_color_data.SetValue( iPtId + iC, c ) 
-#            self.recolored_points.append( iPtIndex )     
-#
-#    def recolorPoint(self, iPtIndex, color ):
-#        self.vtk_color_data.SetValue( iPtIndex, color ) 
-#        self.recolored_points.append( iPtIndex )     
-#
-#    def clearColoredPoints( self ):
-#        for iPt in self.recolored_points:
-#            self.clearColoredPoint( iPt )
-#        self.recolored_points = []
-#
-#    def clearColoredPoint3( self, iPtIndex ):
-#        if iPtIndex < self.npoints:
-#            iPtId = 3*iPtIndex
-#            for iC in range(3):
-#                self.vtk_color_data.SetValue( iPtId + iC, 0 )   
-#
-#    def clearColoredPoint( self, iPtIndex ):
-#        self.vtk_color_data.SetValue( iPtIndex, 0 )   
-
-#     def terminate(self):
-#         self.partitioned_point_cloud.terminate()
-
     def getSphere(self):
         if self.sphere_source == None:
             self.createSphere()
@@ -442,7 +405,7 @@ class CPCPlot( DV3DPlot ):
             self.resetCamera( pts[self.render_mode] )
             self.renderer.ResetCameraClippingRange()   
         if ( self.topo == PlotType.Spherical ): self.setFocalPoint( [0,0,0] )
-        self.enableSlicing() 
+#        self.enableSlicing() 
         self.mapManager.setMapVisibility( self.topo )
         self.render()
         
@@ -452,65 +415,16 @@ class CPCPlot( DV3DPlot ):
             
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
-        keysym =  eventArgs[1]
-#         mods = eventArgs[2]
-#         shift = mods & QtCore.Qt.ShiftModifier
-#         ctrl = mods & QtCore.Qt.ControlModifier
-#         alt = mods & QtCore.Qt.AltModifier
-# #        print " KeyPress %x '%s' %d %d %d" % ( key, keysym, shift, ctrl, alt ) 
-#         sys.stdout.flush()
-#         upArrow = QtCore.Qt.Key_Up
-#         if key == upArrow:
-#             if self.process_mode == ProcessMode.Thresholding:
-#                 self.shiftThresholding( 1, 0 )  
-# #             elif self.process_mode == ProcessMode.Slicing: 
-# #                 self.shiftSlice( 1, 0 )           
-#         if key == QtCore.Qt.Key_Down:
-#             if self.process_mode == ProcessMode.Thresholding:
-#                 self.shiftThresholding( -1, 0 )  
-# #             elif self.process_mode == ProcessMode.Slicing: 
-# #                 self.shiftSlice( -1, 0 )
-#     
-#         if key == QtCore.Qt.Key_Left:   
-#             if self.process_mode == ProcessMode.Thresholding:
-#                 self.shiftThresholding( 0, -1 )
-# #             elif self.process_mode == ProcessMode.Slicing: 
-# #                 self.shiftSlice( 0, -1 )
-#         if key == QtCore.Qt.Key_Right:       
-#             if self.process_mode == ProcessMode.Thresholding:
-#                 self.shiftThresholding( 0, 1 )
-# #             elif self.process_mode == ProcessMode.Slicing: 
-# #                 self.shiftSlice( 0, 1 )
-            
+        keysym =  eventArgs[1]            
         if   keysym == "s":  self.toggleTopo()
         elif keysym == "t":  self.stepTime()
         elif keysym == "A":  self.stepTime( False )
         elif keysym == "c":  self.toggleClipping()
         elif keysym == "m":  self.toggleRenderMode()
-        elif keysym == "p":
-            if self.process_mode == ProcessMode.Slicing:
-                self.sliceAxisIndex =  ( self.sliceAxisIndex + 1 ) % 3 
-            self.enableSlicing()  
-        elif keysym == "v":
-            self.enableThresholding()
-#             self.updateTextDisplay( "Mode: Thresholding", True )
-#             self.process_mode = ProcessMode.Thresholding 
-#             self.planeWidgetOff()
-#             self.shiftThresholding( 0, 0 )  
+        elif keysym == "v":  self.enableThresholding()
         elif keysym == "i":  self.setPointIndexBounds( 5000, 7000 )
         else: return False
         return True
-                
-    def enableSlicing( self ):
-        self.clearSubsetting()
-        self.clearInteractions()
-        self.process_mode = ProcessMode.Slicing
-        if self.render_mode ==  ProcessMode.LowRes:
-            self.setRenderMode( ProcessMode.HighRes ) 
-        spos = self.getSlicePosition()                    
-        self.commandeerSlider( 1, "Slice Position", self.point_cloud_overview.getBounds(), spos )
-        self.updateTextDisplay( "Mode: Slicing", True )
-        self.execCurrentSlice()
                         
     def processCategorySelectionCommand( self, args ):
         op = args[0]
@@ -546,21 +460,34 @@ class CPCPlot( DV3DPlot ):
             elif args[1] == "Stop":
                 pass
 
-#    def stepTime( self, forward = True ):
-#        ntimes = len(self.time) if self.time else 1
-#        self.iTimeStep = self.iTimeStep + 1 if forward else self.iTimeStep - 1
-#        if self.iTimeStep < 0: self.iTimeStep = ntimes - 1
-#        if self.iTimeStep >= ntimes: self.iTimeStep = 0
-#        try:
-#            tvals = self.time.asComponentTime()
-#            tvalue = str( tvals[ self.iTimeStep ] )
-#            self.updateTextDisplay( "Time: %s " % tvalue )
-#        except Exception, err:
-#            print>>sys.stderr, "Can't understand time metadata."
-#        np_var_data_block = self.getDataBlock()
-#        var_data = np_var_data_block[:] if ( self.nLevels == 1 ) else np_var_data_block[ :, : ]    
-#        self.setVarData( var_data ) 
-#        self.renderWindow.Render()
+    def stepTime( self, forward = True ):
+#         ntimes = len(self.time) if self.time else 1
+#         self.iTimeStep = self.iTimeStep + 1 if forward else self.iTimeStep - 1
+#         if self.iTimeStep < 0: self.iTimeStep = ntimes - 1
+#         if self.iTimeStep >= ntimes: self.iTimeStep = 0
+#         try:
+#             tvals = self.time.asComponentTime()
+#             tvalue = str( tvals[ self.iTimeStep ] )
+#             self.updateTextDisplay( "Time: %s " % tvalue )
+#         except Exception, err:
+#             print>>sys.stderr, "Can't understand time metadata."
+#         np_var_data_block = self.getDataBlock()
+#         var_data = np_var_data_block[:] if ( self.nLevels == 1 ) else np_var_data_block[ :, : ]    
+#         self.setVarData( var_data ) 
+#         self.renderWindow.Render()
+#         thresholding = (self.process_mode == ProcessMode.Thresholding)
+#         if self.partitioned_point_cloud: 
+#             self.partitioned_point_cloud.stepTime( update_points=thresholding )
+#             self.point_cloud_overview.stepTime( process= not self.partitioned_point_cloud.hasActiveCollections(), update_points=thresholding )
+#         else:
+#             self.point_cloud_overview.stepTime( process=True, update_points=thresholding)
+
+        thresholding = (self.process_mode == ProcessMode.Thresholding)
+        self.render_mode = ProcessMode.LowRes    
+        self.partitioned_point_cloud.clear()
+        self.point_cloud_overview.stepTime( process=True, update_points=thresholding)
+        self.low_res_actor.VisibilityOn()                                    
+        self.render() 
 
     def update_subset_specs(self, new_specs ):
         print " $$$$$$ update_subset_specs: %s " % str( new_specs )
@@ -607,9 +534,46 @@ class CPCPlot( DV3DPlot ):
 
     @property
     def defvar(self):
-        return self.point_cloud_overview.point_collection.var.id       
+        return self.point_cloud_overview.point_collection.var.id 
+    
+    def processSlicingCommand( self, args, config_function = None ):      
+        sliceParam = config_function.value
+        if args and args[0] == "StartConfig":            
+            self.render_mode = ProcessMode.LowRes    
+            self.partitioned_point_cloud.clear()
+            self.execCurrentSlice()   
+            self.low_res_actor.VisibilityOn()                        
+        elif args and args[0] == "Init":
+            axis_bounds = self.point_cloud_overview.getBounds()
+            config_function.initial_value = axis_bounds
+            config_function.range_bounds = axis_bounds
+            sliceParam.setValue( 'bounds', [ [ axis_bounds[0], axis_bounds[1] ], [ axis_bounds[2], axis_bounds[3] ], [ axis_bounds[4], axis_bounds[5] ] ] )
+            sliceParam.setValue( 'spos', [ axis_bounds[0], axis_bounds[2], axis_bounds[4] ] )
+            sliceParam.setValue( 0, axis_bounds[0] )
+        elif args and args[0] == "EndConfig":
+            positions = sliceParam.getValue( 'spos' )
+            positions[self.sliceAxisIndex] = sliceParam.getValue()
+            sliceParam.setValue( 'spos', positions )
+            self.setRenderMode( ProcessMode.HighRes )            
+            self.execCurrentSlice( )       
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+            self.sliceAxisIndex =  ( self.sliceAxisIndex + 1 ) % 3 
+            self.clearSubsetting()
+#            self.clearInteractions()
+            self.process_mode = ProcessMode.Slicing
+            positions = sliceParam.getValue( 'spos' )
+            spos = positions[ self.sliceAxisIndex ]
+            axis_bounds = sliceParam.getValue( 'bounds' )
+            config_function.range_bounds = axis_bounds[ self.sliceAxisIndex ]
+            sliceParam.setValue( 0, spos )
+            self.execCurrentSlice( spos=spos )
+        elif args and args[0] == "UpdateConfig":
+            sliceParam.setValue( 0, args[2] )
+            self.execCurrentSlice(spos=args[2])
     
     def processThresholdRangeCommand( self, args, config_function = None ):
+        print " ---->>  processThresholdRangeCommand: %s[%d] " % ( args[0], self.thresholdCmdIndex )
         volumeThresholdRange = config_function.value
         if args and args[0] == "StartConfig":
             if self.render_mode ==  ProcessMode.HighRes:
@@ -618,32 +582,36 @@ class CPCPlot( DV3DPlot ):
                 self.point_cloud_overview.generateSubset( spec=self.current_subset_specs )
             if self.process_mode <> ProcessMode.Thresholding:
                 self.enableThresholding()        
+        elif args and args[0] == "Init":
+            init_range = self.point_cloud_overview.getValueRange()
+            config_function.range_bounds = init_range  
+            config_function.initial_value = init_range  
+            volumeThresholdRange.setValues( init_range )
+            volumeThresholdRange.setValue( self.defvar, init_range )
         elif args and args[0] == "EndConfig":
             self.setRenderMode( ProcessMode.HighRes )                
             self.updateThresholding()        
         elif args and args[0] == "InitConfig":
                 self.updateTextDisplay( config_function.label )
-                init_range = self.point_cloud_overview.getValueRange()
-                config_function.range_bounds = init_range  
-                config_function.setValues( range )
-                volumeThresholdRange[ self.defvar ] = range
+                volumeThresholdRange.setValues( volumeThresholdRange.getValue( self.defvar ) )
         elif args and args[0] == "Open":
             self.enableThresholding()
         elif args and args[0] == "Close":
             isOK = args[1]
             self.setRenderMode( ProcessMode.HighRes )
-            if isOK: self.updateThresholding( self.defvar, self.volumeThresholdRange[self.defvar].getValues() )                
+            if isOK: self.updateThresholding( self.defvar, volumeThresholdRange.getValue(self.defvar) )                
             self.render()
         elif args and args[0] == "UpdateConfig":
-            print " ---->>  processThresholdRangeCommand: UpdateConfig[%d] " % self.thresholdCmdIndex
             if ( self.thresholdCmdIndex % self.thresholdingSkipFactor ) == 0:
-                vt_range = list( self.volumeThresholdRange.getValue( self.defvar ) )
+                vt_range = list( volumeThresholdRange.getValue( self.defvar ) )
                 vt_range[ args[1] ] = args[2]
-                self.volumeThresholdRange.setValue( self.defvar, vt_range )
+                volumeThresholdRange.setValue( self.defvar, vt_range )
+                volumeThresholdRange.setValues( vt_range )
                 self.updateThresholding( self.defvar, vt_range, False )
             self.thresholdCmdIndex = self.thresholdCmdIndex + 1
                     
     def enableThresholding( self, args = None ):
+        volumeThresholdRange = self.getConfigFunction('thresholding').value
         self.updateTextDisplay( "Mode: Thresholding", True )
         self.thresholdCmdIndex = 0
         self.clearSubsetting()
@@ -652,8 +620,7 @@ class CPCPlot( DV3DPlot ):
 #             self.setRenderMode( ProcessMode.HighRes )
 #         if self.scalarRange <> None:
 #             self.point_cloud_overview.setScalarRange( self.scalarRange.getValues() )
-        if self.defvar in self.volumeThresholdRange:
-            self.updateThresholding( self.defvar, self.volumeThresholdRange[self.defvar].getRange(), False )
+        self.updateThresholding( self.defvar, volumeThresholdRange.getValue(self.defvar), False )
         self.updateInteractionState('thresholding')
                    
     def processColorScaleCommand( self, args, config_function ):
@@ -689,9 +656,9 @@ class CPCPlot( DV3DPlot ):
         self.render()
 
                      
-    def shiftThresholding( self, position_inc, width_inc ):
-        self.volumeThresholdRange[self.defvar].shiftWindow(position_inc, width_inc) 
-        self.updateThresholding( self.defvar, self.volumeThresholdRange[ self.defvar ].getRange() )
+#     def shiftThresholding( self, position_inc, width_inc ):
+#         volumeThresholdRange = self.getConfigFunction('thresholding').value
+#         self.updateThresholding( self.defvar, volumeThresholdRange.getValue(self.defvar) )
 
     def getSliceWidth(self, res, slice_index = -1  ):
         sliceWidths = self.getConfigFunction('sliceProp').value
@@ -699,29 +666,31 @@ class CPCPlot( DV3DPlot ):
         if slice_index == 2: return self.zSliceWidth
         return sliceWidths.getValue( res )
             
-    def getSlicePosition( self, normalized = False  ): 
-#        if slice_index == -1: slice_index = self.sliceAxisIndex
-        widget_item = self.currentSliders.get( 1, None )
-        if widget_item == None: 
-            swidget = self.createSliderWidget(1) 
-        else:
-            ( process_mode, interaction_state, swidget ) = widget_item 
-        srep = swidget.GetRepresentation( )  
-        spos = srep.GetValue()
+    def getSlicePosition( self, **args ): 
+        normalized = args.get( 'normalized', False )
+        spos = args.get( 'spos', None )
+        if spos == None:
+            widget_item = self.currentSliders.get( 0, None )
+            if widget_item == None: 
+                swidget = self.createSliderWidget(0) 
+            else:
+                ( process_mode, interaction_state, swidget ) = widget_item 
+            srep = swidget.GetRepresentation( )  
+            spos = srep.GetValue()
         if normalized: 
             axis_bounds = self.point_cloud_overview.getBounds()
             sindex = 2*self.sliceAxisIndex 
             spos =  ( spos - axis_bounds[sindex]) / ( axis_bounds[sindex+1] - axis_bounds[sindex])   
         return spos
 
-    def setSlicePosition(self, slice_pos ):  
-        widget_item = self.currentSliders.get( 1, None )
-        if widget_item == None: 
-            swidget = self.createSliderWidget(1) 
-        else:
-            ( process_mode, interaction_state, swidget ) = widget_item 
-        srep = swidget.GetRepresentation( )  
-        srep.SetValue(slice_pos)
+#     def setSlicePosition(self, slice_pos ):  
+#         widget_item = self.currentSliders.get( 0, None )
+#         if widget_item == None: 
+#             swidget = self.createSliderWidget(0) 
+#         else:
+#             ( process_mode, interaction_state, swidget ) = widget_item 
+#         srep = swidget.GetRepresentation( )  
+#         srep.SetValue(slice_pos)
                 
 #     def getCurrentSlicePosition(self):
 #         bounds = self.point_cloud_overview.getBounds()
@@ -729,12 +698,24 @@ class CPCPlot( DV3DPlot ):
 #         return bounds[sindex] + self.getSlicePosition() * ( bounds[sindex+1] - bounds[sindex] )
     
     def execCurrentSlice( self, **args ):
-        slice_bounds = self.getSliceBounds(True)
-        self.updateSlicing( self.sliceAxisIndex, slice_bounds, **args )
+        args['normalized'] = True
+        slice_bounds = self.getSliceBounds(**args)
+        self.invalidate()
+        self.clearSliceSpecs()
+        ( rmin, rmax ) = slice_bounds[ self.render_mode ]
+        self.current_subset_specs[ self.sliceAxes[self.sliceAxisIndex] ] = ( self.sliceAxes[self.sliceAxisIndex], rmin, rmax, True )
+        if self.render_mode ==  ProcessMode.HighRes:
+            self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=True )
+        else:
+            self.point_cloud_overview.generateSubset( spec=self.current_subset_specs )
+#            if self.partitioned_point_cloud:
+#                self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=False )
+#        self.configDialog.newSubset( self.point_cloud_overview.getCellData() )
+        self.render( mode=self.render_mode )
         
-    def getSliceBounds( self, normalized=False ):
+    def getSliceBounds( self, **args ):
         slice_bounds = []
-        spos = self.getSlicePosition( normalized )
+        spos = self.getSlicePosition( **args )
         for iRes in [ ProcessMode.LowRes, ProcessMode.HighRes ]:
             slice_radius = self.getSliceWidth( iRes ) # self.sliceWidth[self.sliceAxisIndex]/(iRes)     
             pmin = max( spos - slice_radius, 0.0 )
@@ -745,11 +726,10 @@ class CPCPlot( DV3DPlot ):
 #        print " && ExecCurrentSlice, slice properties: %s " % ( str( self.sliceProperties ) ); sys.stdout.flush()
         return slice_bounds
     
-    def pushSlice( self, slice_pos ):
-        self.updateTextDisplay( " Slice Position: %s " % str( slice_pos ) )
-        sindex = 2*self.sliceAxisIndex  
-        self.setSlicePosition( slice_pos )
-        self.execCurrentSlice()
+#     def pushSlice( self, slice_pos ):
+#         self.updateTextDisplay( " Slice Position: %s " % str( slice_pos ) )
+#         self.setSlicePosition( slice_pos )
+#         self.execCurrentSlice()
 
     def shiftResolution( self, ncollections_inc, ptsize_inc ):
         if (ncollections_inc <> 0) and ( self.partitioned_point_cloud <> None ):
@@ -809,7 +789,11 @@ class CPCPlot( DV3DPlot ):
 
     def processPointSizeCommand( self, arg, config_function ):
         pointSize = config_function.value
-        if arg and arg[0] == "InitConfig":
+        if arg and arg[0] == "Init":
+            for resolution in range(2):
+                pc = self.getPointCloud(resolution)
+                pc.setPointSize( config_function.initial_value[resolution] )
+        elif arg and arg[0] == "InitConfig":
                 self.updateTextDisplay( config_function.label )
         elif arg[0] == 'StartConfig':
             render_mode = arg[1]
@@ -847,6 +831,10 @@ class CPCPlot( DV3DPlot ):
         sliceProp = config_function.value
         if arg and arg[0] == "InitConfig":
                 self.updateTextDisplay( config_function.label )
+        elif arg[0] == 'Init':
+            for resolution in range(2):
+                pc = self.getPointCloud(resolution)
+                pc.setPointSize( config_function.initial_value[ resolution ] )
         elif arg[0] == 'StartConfig':
             render_mode = arg[1]
             self.setRenderMode( render_mode )
@@ -867,13 +855,13 @@ class CPCPlot( DV3DPlot ):
             self.render() 
         elif arg and arg[0] == "UpdateConfig": 
             resolution = arg[1]
-            sliceWidth = sliceProp.getValue( resolution )  
-            pc = self.getPointCloud(resolution)
-#            pc.setPointSize( new_point_size )
-            self.setRenderMode( resolution )
-            if resolution == ProcessMode.HighRes: 
-                if self.partitioned_point_cloud: self.partitioned_point_cloud.refresh(True)
-            self.render( mode=resolution )
+            new_slice_width = arg[2]
+            sliceWidth = sliceProp.getValue( resolution ) 
+            if sliceWidth <> new_slice_width:
+                sliceProp.setValue( resolution, new_slice_width )
+                self.setRenderMode( resolution )
+                self.execCurrentSlice()
+                self.render( mode=resolution )
                                         
     def setColorbarRange( self, cbar_range, cmap_index=0 ):
         colormapManager = self.getColormapManager( index=cmap_index )
@@ -904,17 +892,18 @@ class CPCPlot( DV3DPlot ):
 #                self.sliceProperties.ValueChanged.connect(  self.processSlicePropertiesCommand )  
 #                self.enableSlicing()
             elif paramKeys[1] == 'Threshold Range':
-                self.volumeThresholdRange[self.defvar] = config_param                 
-                config_param.setScalingBounds( self.point_cloud_overview.getValueRange()  ) 
+                pass
+#                self.volumeThresholdRange[self.defvar] = config_param                 
+#                config_param.setScalingBounds( self.point_cloud_overview.getValueRange()  ) 
 #                config_param.ValueChanged.connect(  self.processThresholdRangeCommand )      
         elif paramKeys[0] == 'Analysis':
             if paramKeys[1] == 'Threshold Range':
-                try:
-                    vname = paramKeys[2]
-                    config_param.setScalingBounds( self.point_cloud_overview.getValueRange( vname )  ) 
-                    self.volumeThresholdRange[vname] = config_param                 
+#                try:
+#                    vname = paramKeys[2]
+#                    config_param.setScalingBounds( self.point_cloud_overview.getValueRange( vname )  ) 
+#                    self.volumeThresholdRange[vname] = config_param                 
 #                    config_param.ValueChanged.connect(  self.processThresholdRangeCommand )  
-                except AttributeError:
+#                except AttributeError:
                     pass    
 #                self.enableThresholding()
         elif paramKeys[0] == 'Points':
@@ -939,7 +928,8 @@ class CPCPlot( DV3DPlot ):
                 self.vscale = config_param   
 #                self.vscale.ValueChanged.connect(  self.processVerticalScalingCommand ) 
             elif paramKeys[1] == 'Vertical Variable':
-                self.vertVar = config_param   
+                pass
+#                self.vertVar = config_param   
 #                self.vertVar.ValueChanged.connect(  self.processVerticalVariableCommand )
         elif paramKeys[0] == 'Variables':
             self.variables[ paramKeys[1] ] = config_param
@@ -972,8 +962,8 @@ class CPCPlot( DV3DPlot ):
         colormapManager.setAlphaGraph( args[0] )
         self.render()
 
-    def setZScale( self, zscale_data, **args ):
-        pass
+#    def setZScale( self, zscale_data, **args ):
+#        pass
 #        self.vscale.setValue( 'value', zscale_data[1], True )
 #        self.processVerticalScalingCommand( [ "UpdateConfig" ] )
 
@@ -995,7 +985,7 @@ class CPCPlot( DV3DPlot ):
                 self.point_cloud_overview.generateSubset( spec=self.current_subset_specs )
                 self.render( mode=self.render_mode )   
         elif args and args[0] == "EndConfig":
-            scaling_spec = ( self.vertVar.getValue(), vscale.getValue() )
+            scaling_spec = ( self.vertVar, vscale.getValue() )
             if self.partitioned_point_cloud:
                 self.partitioned_point_cloud.generateZScaling( spec=scaling_spec )
             self.setRenderMode( ProcessMode.HighRes )
@@ -1003,13 +993,13 @@ class CPCPlot( DV3DPlot ):
         elif args and args[0] == "InitConfig":
                 self.updateTextDisplay( config_function.label )                      
         elif args and args[0] == "UpdateConfig":           
-            vscale.setValue( args[2], True ) 
-            scaling_spec = ( self.vertVar.getValue(), args[2] )
+            vscale.setValue( 0, args[2] ) 
+            scaling_spec = ( self.vertVar, args[2] )
             self.point_cloud_overview.generateZScaling( spec=scaling_spec )
             self.render()
                         
     def processVerticalVariableCommand(self, args=None ):
-        scaling_spec = ( self.vertVar['selected'], self.vscale.getValue() )
+        scaling_spec = ( self.vertVar, self.vscale.getValue() )
         if self.partitioned_point_cloud:
             self.partitioned_point_cloud.generateZScaling( spec=scaling_spec )
         self.point_cloud_overview.generateZScaling( spec=scaling_spec )
@@ -1037,20 +1027,6 @@ class CPCPlot( DV3DPlot ):
     def enableRender(self, **args ):
         onMode = args.get( 'mode', ProcessMode.AnyRes )
         return (onMode == ProcessMode.AnyRes) or ( onMode == self.render_mode )
-
-    def updateSlicing( self, sliceIndex, slice_bounds, **args ):
-        self.invalidate()
-        self.clearSliceSpecs()
-        ( rmin, rmax ) = slice_bounds[ self.render_mode ]
-        self.current_subset_specs[ self.sliceAxes[sliceIndex] ] = ( self.sliceAxes[sliceIndex], rmin, rmax, True )
-        if self.render_mode ==  ProcessMode.HighRes:
-            self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=True )
-        else:
-            self.point_cloud_overview.generateSubset( spec=self.current_subset_specs )
-#            if self.partitioned_point_cloud:
-#                self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=False )
-#        self.configDialog.newSubset( self.point_cloud_overview.getCellData() )
-        self.render( mode=self.render_mode )
 
 #    def updateSlicing1( self, sliceIndex, slice_bounds ):
 #        self.invalidate()
@@ -1190,11 +1166,11 @@ class CPCPlot( DV3DPlot ):
             srep = obj.GetRepresentation( ) 
             config_function = self.getConfigFunction( self.InteractionState )
             config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep.GetValue() ] )                         
-        else:
-            if self.process_mode == ProcessMode.Slicing:
-                ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
-                slice_pos = swidget.GetRepresentation( ).GetValue()
-                self.pushSlice( slice_pos )         
+#         else:
+#             if self.process_mode == ProcessMode.Slicing:
+#                 ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
+#                 slice_pos = swidget.GetRepresentation( ).GetValue()
+#                 self.pushSlice( slice_pos )         
 
     def processStartInteractionEvent( self, obj, event ): 
         slider_index = self.checkInteractionState( obj, event ) 
@@ -1202,9 +1178,9 @@ class CPCPlot( DV3DPlot ):
         if ( self.InteractionState <> None ): 
             config_function = self.getConfigFunction( self.InteractionState )
             config_function.processInteractionEvent( [ "StartConfig", slider_index ] )  
-        else:   
-            if self.process_mode == ProcessMode.Slicing:
-                self.setRenderMode( ProcessMode.LowRes )
+#         else:   
+#             if self.process_mode == ProcessMode.Slicing:
+#                 self.setRenderMode( ProcessMode.LowRes )
                 
     def checkInteractionState( self, obj, event ):
         for item in self.currentSliders.items():
@@ -1230,10 +1206,10 @@ class CPCPlot( DV3DPlot ):
         if ( self.InteractionState <> None ): 
             config_function = self.getConfigFunction( self.InteractionState )
             config_function.processInteractionEvent( [ "EndConfig" ] )  
-        else:   
-            if self.process_mode == ProcessMode.Slicing:
-                self.setRenderMode( ProcessMode.HighRes )
-                self.execCurrentSlice()
+#         else:   
+#             if self.process_mode == ProcessMode.Slicing:
+#                 self.setRenderMode( ProcessMode.HighRes )
+#                 self.execCurrentSlice()
 #            self.setSlicePosition( self.getSlicePosition() )
 #            self.printInteractionStyle( 'processEndInteractionEvent')
 #            self.renderWindow.GetInteractor().SetInteractorStyle( self.navigationInteractorStyle )
@@ -1335,18 +1311,21 @@ class CPCPlot( DV3DPlot ):
         print " Init PCViewer, nInputPoints = %d, n_overview_points = %d, n_subproc_points = %d, nCollections = %d, overview skip index = %s" % ( nInputPoints, n_overview_points, n_subproc_points, nCollections, self.point_cloud_overview.getSkipIndex() )
         self.initCollections( nCollections, init_args, lut = lut, maxStageHeight=self.maxStageHeight  )
         interface = init_args[2]
+        self.defvar =  init_args[3]
+        self.vertVar = None
+        self.initializeConfiguration()  
+        
         if self.widget and show: self.widget.show()
         if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
         else:
             ConfigurableFunction.activate()
-            self.processCategorySelectionCommand( [ 'Subsets' ] )
+            self.updateInteractionState( 'slicing' )
              
 #             pc = self.point_cloud_overview.getPointCollection()
 #             cfgInterface = ConfigurationInterface( metadata=pc.getMetadata(), defvar=pc.var.id, callback=self.processConfigCmd  )
 #             cfgInterface.build()
 #             cfgInterface.activate()
             
-        self.initializeConfiguration()  
         self.start()
 
 

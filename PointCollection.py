@@ -455,7 +455,8 @@ class PointCollection():
             return vmin, vmax   
         elif op == 'points': 
 #            print " subproc: Process points request, args = %s " % str( args ); sys.stdout.flush()
-            self.setPointHeights( height_var=args[1], z_scale=args[2] )  
+            if args[2] <> None:
+                self.setPointHeights( height_var=args[1], z_scale=args[2] )  
             
         elif op == 'timestep': 
             self.stepTime( **kwargs )  

@@ -265,7 +265,7 @@ class ConfigParameter:
     def serialize( self ):
         return str( self.values )
 
-    def getValue( self, key='value', default_value=None ):
+    def getValue( self, key=0, default_value=None ):
         return self.values.get( key, default_value )
 
     def setValue( self, key, val, update=False  ):
@@ -323,7 +323,6 @@ class ConfigParameter:
     def getRange( self ):
         return ( self.rmin, self.rmax )
 
-
 class ConfigurableFunction:
     
     CfgManager = ConfigManager() 
@@ -351,6 +350,9 @@ class ConfigurableFunction:
         
     def open(self, state ):
         self.state = state
+        
+    def close(self) :
+        pass
         
     def processInteractionEvent( self, args ):
         if self.interactionHandler:

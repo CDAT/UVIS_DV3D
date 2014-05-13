@@ -240,8 +240,8 @@ class MultiVarPointCollection():
             z_scaling = args.get( 'z_scale', 1.0 )
             self.data_height = args.get( 'data_height', None )
             ascending = self.levelsAreAscending()
+#            print "setPointHeights: z_scaling=%s, stage_height=%s" % ( str(z_scaling), str(self.maxStageHeight) )
             stage_height = ( self.maxStageHeight * z_scaling )
-            print "setPointHeights: z_scaling=%.2f, stage_height=%.2f" % ( z_scaling, stage_height )
             
             nz = len( self.lev ) if self.lev else 1
             if height_varname and (height_varname <> self.hgt_var) and (height_varname <> 'Levels' ):
@@ -590,7 +590,8 @@ class MultiVarPointCollection():
                 return vmin, vmax   
         elif op == 'points': 
 #            print " subproc: Process points request, args = %s " % str( args ); sys.stdout.flush()
-            self.setPointHeights( height_var=args[1], z_scale=args[2] )  
+            if args[2] <> None:
+                self.setPointHeights( height_var=args[1], z_scale=args[2] )  
         elif op == 'ROI': 
             ROI = args[1]
             self.setROI(ROI)            
