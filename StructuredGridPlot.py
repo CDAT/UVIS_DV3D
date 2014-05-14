@@ -6,7 +6,7 @@ Created on Apr 23, 2014
     
 import vtk, sys, os
 from ColorMapManager import *
-from ConfigFunctions import *
+#from ConfigFunctions import *
 from StructuredVariableReader import StructuredDataReader
 from DV3DPlot import *
       
@@ -30,11 +30,12 @@ class StructuredGridPlot(DV3DPlot):
         self.enableBasemap = True
         self.map_opacity = [ 0.4, 0.4 ]
         self.roi = None
-        self.addConfigurableLevelingFunction( 'zScale', 'z', label='Vertical Scale', setLevel=self.setZScale, activeBound='max', getLevel=self.getScaleBounds, windowing=False, sensitivity=(10.0,10.0), initRange=[ 2.0, 2.0, 1 ], group=ConfigGroup.Display )
-        self.addConfigurableLevelingFunction( 'map_opacity', 'M', label='Base Map Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setMapOpacity, activeBound='min',  getLevel=self.getMapOpacity, isDataValue=False, layerDependent=True, group=ConfigGroup.BaseMap, bound = False )
 
-    def processKeyEvent( self, key, caller=None, event=None ):
-#        print "process Key Event, key = %s" % ( key )
+    def addConfigurableLevelingFunction(self, name, key, **args):
+        self.configurableFunctions[name] = WindowLevelingConfigurableFunction( name, key, **args )
+
+    def onKeyEvent(self, eventArgs ):
+        key = eventArgs[0]
         md = self.getInputSpec().getMetadata()
         if ( self.createColormap and ( key == 'l' ) ): 
             self.toggleColormapVisibility()                       
@@ -45,8 +46,8 @@ class StructuredGridPlot(DV3DPlot):
             self.showInteractiveLens = not self.showInteractiveLens 
             self.render() 
         else:
-            DV3DPlot.processKeyEvent( self, key, caller, event )
-        return 0
+            return DV3DPlot.onKeyEvent( self, eventArgs )
+        return 1
 
     def getRangeBounds( self, input_index = 0 ):
         ispec = self.inputSpecs[ input_index ] 
@@ -88,7 +89,7 @@ class StructuredGridPlot(DV3DPlot):
             ns = input.GetNumberOfScalarComponents()
             spacing = input.GetSpacing()
             ix, iy, iz = spacing
-            sz = zscale_data[1]
+            sz = zscale_data[0]
             if iz <> sz:
 #                print " PVM >---------------> Change input zscale: %.4f -> %.4f" % ( iz, sz )
                 input.SetSpacing( ix, iy, sz )  
@@ -265,7 +266,7 @@ class StructuredGridPlot(DV3DPlot):
     def initializeConfiguration( self, cmap_index=0, **args ):
         ispec = self.inputSpecs[ cmap_index ] 
         args['units'] = ispec.units
-        DV3DPlot.initializeConfiguration( self, cmap_index, **args )
+        DV3DPlot.initializeConfiguration( self, **args )
         ispec.addMetadata( { 'colormap' : self.getColormapSpec(), 'orientation' : self.iOrientation } ) 
 #        self.updateSliceOutput()
 
@@ -500,7 +501,7 @@ class StructuredGridPlot(DV3DPlot):
         return result, bounded_dims
 
     def init(self, **args ):
-        init_args = args[ 'init_args' ]      
+        init_args = args[ 'init' ]      
         show = args.get( 'show', False )  
         n_cores = args.get( 'n_cores', 32 )    
         lut = self.getLUT()

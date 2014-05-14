@@ -6,9 +6,7 @@ Created on Feb 4, 2014
 
 import os, os.path, sys, argparse, time, multiprocessing
 from DistributedPointCollections import kill_all_zombies
-from PointCloudViewer import CPCPlot
-#from SliceViewer import SlicePlot
-from VolumeViewer import VolumePlot
+from Application import DV3D
 from MultiVarPointCollection import InterfaceType
 
 parser = argparse.ArgumentParser(description='DV3D Point Cloud Viewer')
@@ -65,13 +63,8 @@ elif ns.data_type == "CSU":
     data_file = os.path.join( data_dir, "ColoState", file_name )
     grid_file = os.path.join( data_dir, "ColoState", "grid.nc" )
     varname = "pressure" 
- 
-if ns.data_type == "GEOS5":   
-    g = VolumePlot(gui=False) 
-    g.init( init_args = ( grid_file, data_file, interface, varname, grid_coords, var_proc_op, roi, 'xyt' ), show=True ) 
 
-else:
-    g = CPCPlot(gui=False) 
-    ncores=multiprocessing.cpu_count()
-    g.init( init_args = ( grid_file, data_file, interface, varname, grid_coords, var_proc_op, roi, 'xyz' ), n_overview_points=n_overview_points, n_cores=1, show=True  )   # n_cores = ncores      
- 
+g = DV3D(gui=False) 
+ncores=multiprocessing.cpu_count()
+g.init( init = ( grid_file, data_file, interface, varname, grid_coords, var_proc_op, roi, 'xyz' ), n_overview_points=n_overview_points, n_cores=1, show=True  )   # n_cores = ncores      
+  

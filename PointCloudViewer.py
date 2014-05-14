@@ -12,7 +12,7 @@ from ConfigurationFunctions import *
 from ColorMapManager import *
 from MapManager import MapManager
 from MultiVarPointCollection import InterfaceType, PlotType
-from DV3DPlot import DV3DPlot
+from DV3DPlot import *
 
 VTK_NO_MODIFIER         = 0
 VTK_SHIFT_MODIFIER      = 1
@@ -104,13 +104,6 @@ def dump_vtk_points( pts, label=None ):
         print "Pt[%d]: %.2f %.2f, %.2f " % ( iPt, pt[ 0 ], pt[ 1 ], pt[ 2 ] )
     print "-------------------------------------------------------------------------------------------------\n"
     
-class ProcessMode:
-    Default = 0
-    Slicing = 1
-    Thresholding = 2
-    LowRes = 0
-    HighRes = 1
-    AnyRes = 2
 
 class ConfigMode:
     Default = 0
@@ -149,16 +142,7 @@ class Counter():
             self.active = False
             return True
         return False
-    
-class SliderConfig:
-    
-    def __init__( self, label, vrange, value ): 
-        self.label = label
-        self.range = vrange
-        self.value = value
-       
-       
-           
+               
 class CPCPlot( DV3DPlot ):  
     
 
@@ -170,7 +154,6 @@ class CPCPlot( DV3DPlot ):
         self.partitioned_point_cloud = None
         self.point_cloud_overview = None
         self.infovisDialog = None
-        self.process_mode = ProcessMode.Default
         self.config_mode = ConfigMode.Default
         self.topo = PlotType.Planar
         self.zSliceWidth = 0.005
@@ -185,9 +168,7 @@ class CPCPlot( DV3DPlot ):
 #        self.resolutionCounter = Counter()
         self._current_subset_specs = {}
         self.sphere_source = None
-        self.currentSliders = {} 
         self.vertVar = 'default'   
-        self.addConfigurableSliderFunction( 'zScale', 'z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
         self.addConfigurableSliderFunction( 'pointSize', 'P', label='Point Size', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processPointSizeCommand, range_bounds=[ 1, 12 ], initValue=[ 5, 1 ] )
         self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
         self.addConfigurableSliderFunction( 'thresholding', 'T', label='Thresholding Range', interactionHandler=self.processThresholdRangeCommand )
@@ -199,27 +180,7 @@ class CPCPlot( DV3DPlot ):
 #        self.addConfigurableSliderFunction( 'slicing', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
 #        self.addConfigurableLevelingFunction( 'map_opacity', 'M', label='Base Map Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setMapOpacity, activeBound='min',  getLevel=self.getMapOpacity, isDataValue=False, layerDependent=True, group=ConfigGroup.BaseMap, bound = False )
 
-    def processKeyEvent( self, key, caller=None, event=None ):
-        keysym = caller.GetKeySym()
-        if self.onKeyEvent( [ key, keysym ] ):
-            pass
-        else:
-            DV3DPlot.processKeyEvent( self, key, caller, event )
-#         if (  key == 't'  ): self.toggleTopo()             
-#         return 0
-
-    def updateInteractionState( self, state, altMode=None ):             
-        config_funct = DV3DPlot.updateInteractionState( self, state, altMode )
-        if ( config_funct <> None ) and (config_funct.type == 'slider'):
-            config_funct.processInteractionEvent( [ "InitConfig" ] )
-            tvals = config_funct.value.getValues()
-            for slider_index in range(2):
-                if slider_index < len(config_funct.sliderLabels):
-                    self.commandeerSlider( slider_index, config_funct.sliderLabels[slider_index], config_funct.range_bounds, tvals[slider_index]  ) # config_funct.initial_value[slider_index] )
-                else:
-                    self.releaseSlider( slider_index )
-        self.render()
-        
+                 
     def processTimerEvent(self, caller, event):
         DV3DPlot.processTimerEvent(self, caller, event)
         eid = caller.GetTimerEventId ()
@@ -233,77 +194,6 @@ class CPCPlot( DV3DPlot ):
 #         if etype == 11:
 #             self.printInteractionStyle('processTimerEvent')
             
-    def updateSliderWidgets(self, value0, value1 ): 
-        for index, value in enumerate( ( value0, value1 ) ):
-            if value <> None:
-                ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
-                srep = swidget.GetRepresentation( )   
-                srep.SetValue( value )
-            
-    def createSliderWidget( self, index ): 
-        sliderRep = vtk.vtkSliderRepresentation2D()
-        loc = [ [0.01,0.48], [0.52, 0.99 ] ] 
-            
-        sliderRep.GetPoint1Coordinate().SetCoordinateSystemToNormalizedDisplay()
-        sliderRep.GetPoint1Coordinate().SetValue( loc[index][0], 0.06, 0 )
-        sliderRep.GetPoint2Coordinate().SetCoordinateSystemToNormalizedDisplay()
-        sliderRep.GetPoint2Coordinate().SetValue( loc[index][1], 0.06, 0 )
-        prop = sliderRep.GetSliderProperty()
-        prop.SetColor( 1.0, 0.0, 0.0 )
-        prop.SetOpacity( 0.5 )
-        sprop = sliderRep.GetSelectedProperty()
-        sprop.SetOpacity( 0.8 )           
-        tprop = sliderRep.GetTubeProperty()
-        tprop.SetColor( 0.5, 0.5, 0.5 )
-        tprop.SetOpacity( 0.5 )
-        cprop = sliderRep.GetCapProperty()
-        cprop.SetColor( 0.0, 0.0, 1.0 )
-        cprop.SetOpacity( 0.5 )
-#        sliderRep.PlaceWidget(  bounds   )  
-        sliderRep.SetSliderLength(0.05)
-        sliderRep.SetSliderWidth(0.02)
-        sliderRep.SetTubeWidth(0.01)
-        sliderRep.SetEndCapLength(0.02)
-        sliderRep.SetEndCapWidth(0.02)
-        sliderRep.SetTitleHeight( 0.02 )    
-        sliderWidget = vtk.vtkSliderWidget()
-        sliderWidget.SetInteractor(self.renderWindowInteractor)
-        sliderWidget.SetRepresentation( sliderRep )
-        sliderWidget.SetAnimationModeToAnimate()
-        sliderWidget.EnabledOn()
-        sliderWidget.AddObserver("StartInteractionEvent", self.processStartInteractionEvent )
-        sliderWidget.AddObserver("EndInteractionEvent", self.processEndInteractionEvent )
-        sliderWidget.AddObserver("InteractionEvent", self.processInteractionEvent )
-        sliderWidget.KeyPressActivationOff()
-        return sliderWidget 
-            
-    def commandeerSlider(self, index, label, bounds, value ): 
-        widget_item = self.currentSliders.get( index, None )
-        if widget_item == None: 
-            swidget = self.createSliderWidget(index) 
-        else:
-            ( process_mode, interaction_state, swidget ) = widget_item 
-        srep = swidget.GetRepresentation( )      
-        srep.SetTitleText( label )    
-        srep.SetMinimumValue( bounds[ 0 ] )
-        srep.SetMaximumValue( bounds[ 1 ]  )
-        srep.SetValue( value )
-        swidget.SetEnabled( 1 ) 
-        self.currentSliders[index] = ( self.process_mode, self.InteractionState, swidget )
-        
-    def releaseSlider( self, index ):        
-        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
-        if swidget: swidget.SetEnabled( 0 ) 
-        
-    def clearInteractions(self):
-        if self.InteractionState <> None: 
-            configFunct = self.configurableFunctions[ self.InteractionState ]
-            configFunct.close()   
-        self.process_mode = ProcessMode.Default
-        self.config_mode = ConfigMode.Default
-        self.InteractionState = None
-        for ( process_mode, interaction_state, swidget ) in self.currentSliders.values():
-            swidget.SetEnabled( 0 ) 
         
     @property
     def current_subset_specs(self):
@@ -1160,52 +1050,6 @@ class CPCPlot( DV3DPlot ):
         self.renderer.AddActor( self.earth_actor )
 
  
-    def processInteractionEvent( self, obj=None, event=None ):
-#        print " processInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
-        if ( self.InteractionState <> None ): 
-            srep = obj.GetRepresentation( ) 
-            config_function = self.getConfigFunction( self.InteractionState )
-            config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep.GetValue() ] )                         
-#         else:
-#             if self.process_mode == ProcessMode.Slicing:
-#                 ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
-#                 slice_pos = swidget.GetRepresentation( ).GetValue()
-#                 self.pushSlice( slice_pos )         
-
-    def processStartInteractionEvent( self, obj, event ): 
-        slider_index = self.checkInteractionState( obj, event ) 
-#        print " processStartInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
-        if ( self.InteractionState <> None ): 
-            config_function = self.getConfigFunction( self.InteractionState )
-            config_function.processInteractionEvent( [ "StartConfig", slider_index ] )  
-#         else:   
-#             if self.process_mode == ProcessMode.Slicing:
-#                 self.setRenderMode( ProcessMode.LowRes )
-                
-    def checkInteractionState( self, obj, event ):
-        for item in self.currentSliders.items():
-            ( process_mode, interaction_state, swidget ) = item[1]
-            if ( id( swidget ) == id( obj ) ): 
-                if self.InteractionState <> interaction_state:            
-                    self.processEndInteractionEvent( obj, event )
-                    if self.InteractionState <> None: self.endInteraction()
-                    self.InteractionState = interaction_state
-                    self.process_mode = process_mode
-                    print "Change Interaction State: %s %d " % ( self.InteractionState, self.process_mode )
-                return item[0]
-        return None
-            
-    def getSliderIndex(self, obj ):
-        for index in self.currentSliders:
-            ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
-            if ( id( swidget ) == id( obj ) ): return index
-        return None
-
-    def processEndInteractionEvent( self, obj, event ):  
-#        print " processEndInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
-        if ( self.InteractionState <> None ): 
-            config_function = self.getConfigFunction( self.InteractionState )
-            config_function.processInteractionEvent( [ "EndConfig" ] )  
 #         else:   
 #             if self.process_mode == ProcessMode.Slicing:
 #                 self.setRenderMode( ProcessMode.HighRes )
@@ -1254,13 +1098,6 @@ class CPCPlot( DV3DPlot ):
             self.sliceWidthSensitivity[2] = self.zSliceWidth
             self.slicePositionSensitivity[2] = self.zSliceWidth
             
-#     def decrementOverviewResolution( self ):
-#         if self.resolutionCounter.isActive(): # self.point_cloud_overview.isVisible():
-#             isBottomedOut = self.resolutionCounter.decrement()
-#             psize = self.resolutionCounter.value()
-# #            print "Decrement point size: %d, isBottomedOut: %s " % ( psize, str(isBottomedOut) ); sys.stdout.flush()
-#             self.point_cloud_overview.setPointSize( psize )
-#             if isBottomedOut: self.point_cloud_overview.hide()
             
     def refreshPointSize(self):
         self.point_cloud_overview.setPointSize( self.pointSize.getValue( ProcessMode.LowRes ) )
@@ -1296,7 +1133,7 @@ class CPCPlot( DV3DPlot ):
         self.getPointCloud().setPointSize( point_size )    
       
     def init(self, **args ):
-        init_args = args[ 'init_args' ]      
+        init_args = args[ 'init' ]      
         n_overview_points = args.get( 'n_overview_points', 500000 )    
         n_subproc_points = args.get( 'n_subproc_points', 500000 )  
         show = args.get( 'show', False )  

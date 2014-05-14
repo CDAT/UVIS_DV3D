@@ -9,6 +9,13 @@ import vtk, traceback
 MIN_LINE_LEN = 50
 VTK_NOTATION_SIZE = 14
 
+class ProcessMode:
+    Default = 0
+    Slicing = 1
+    Thresholding = 2
+    LowRes = 0
+    HighRes = 1
+    AnyRes = 2
 
 class TextDisplayMgr:
     
@@ -98,6 +105,7 @@ class DV3DPlot():
         self.ycenter = 0.0
         self.ywidth = 180.0
         self.widget = None
+        self.process_mode = ProcessMode.Default
         
         self.configuring = False
         self.configurableFunctions = {}
@@ -109,12 +117,11 @@ class DV3DPlot():
         self.InteractionState = None
         self.LastInteractionState = None
         self.colormapManagers= {}
+        self.currentSliders = {} 
+        self.addConfigurableSliderFunction( 'zScale', 'z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
 
     def addConfigurableFunction(self, name, function_args, key, **args):
         self.configurableFunctions[name] = ConfigurableFunction( name, function_args, key, **args )
-
-#     def addConfigurableLevelingFunction(self, name, key, **args):
-#         self.configurableFunctions[name] = WindowLevelingConfigurableFunction( name, key, **args )
 
     def addConfigurableSliderFunction(self, name, key, **args):
         self.configurableFunctions[name] = ConfigurableSliderFunction( name, key, **args )
@@ -129,6 +136,124 @@ class DV3DPlot():
         for configFunct in self.configurableFunctions.values():
             configFunct.applyParameter( **args  )
 
+    def updateSliderWidgets(self, value0, value1 ): 
+        for index, value in enumerate( ( value0, value1 ) ):
+            if value <> None:
+                ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
+                srep = swidget.GetRepresentation( )   
+                srep.SetValue( value )
+            
+    def createSliderWidget( self, index ): 
+        sliderRep = vtk.vtkSliderRepresentation2D()
+        loc = [ [0.01,0.48], [0.52, 0.99 ] ] 
+            
+        sliderRep.GetPoint1Coordinate().SetCoordinateSystemToNormalizedDisplay()
+        sliderRep.GetPoint1Coordinate().SetValue( loc[index][0], 0.06, 0 )
+        sliderRep.GetPoint2Coordinate().SetCoordinateSystemToNormalizedDisplay()
+        sliderRep.GetPoint2Coordinate().SetValue( loc[index][1], 0.06, 0 )
+        prop = sliderRep.GetSliderProperty()
+        prop.SetColor( 1.0, 0.0, 0.0 )
+        prop.SetOpacity( 0.5 )
+        sprop = sliderRep.GetSelectedProperty()
+        sprop.SetOpacity( 0.8 )           
+        tprop = sliderRep.GetTubeProperty()
+        tprop.SetColor( 0.5, 0.5, 0.5 )
+        tprop.SetOpacity( 0.5 )
+        cprop = sliderRep.GetCapProperty()
+        cprop.SetColor( 0.0, 0.0, 1.0 )
+        cprop.SetOpacity( 0.5 )
+#        sliderRep.PlaceWidget(  bounds   )  
+        sliderRep.SetSliderLength(0.05)
+        sliderRep.SetSliderWidth(0.02)
+        sliderRep.SetTubeWidth(0.01)
+        sliderRep.SetEndCapLength(0.02)
+        sliderRep.SetEndCapWidth(0.02)
+        sliderRep.SetTitleHeight( 0.02 )    
+        sliderWidget = vtk.vtkSliderWidget()
+        sliderWidget.SetInteractor(self.renderWindowInteractor)
+        sliderWidget.SetRepresentation( sliderRep )
+        sliderWidget.SetAnimationModeToAnimate()
+        sliderWidget.EnabledOn()
+        sliderWidget.AddObserver("StartInteractionEvent", self.processStartInteractionEvent )
+        sliderWidget.AddObserver("EndInteractionEvent", self.processEndInteractionEvent )
+        sliderWidget.AddObserver("InteractionEvent", self.processInteractionEvent )
+        sliderWidget.KeyPressActivationOff()
+        return sliderWidget 
+            
+    def commandeerSlider(self, index, label, bounds, value ): 
+        widget_item = self.currentSliders.get( index, None )
+        if widget_item == None: 
+            swidget = self.createSliderWidget(index) 
+        else:
+            ( process_mode, interaction_state, swidget ) = widget_item 
+        srep = swidget.GetRepresentation( )      
+        srep.SetTitleText( label )    
+        srep.SetMinimumValue( bounds[ 0 ] )
+        srep.SetMaximumValue( bounds[ 1 ]  )
+        srep.SetValue( value )
+        swidget.SetEnabled( 1 ) 
+        self.currentSliders[index] = ( self.process_mode, self.InteractionState, swidget )
+        
+    def releaseSlider( self, index ):        
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
+        if swidget: swidget.SetEnabled( 0 ) 
+        
+    def clearInteractions(self):
+        if self.InteractionState <> None: 
+            configFunct = self.configurableFunctions[ self.InteractionState ]
+            configFunct.close()   
+        self.process_mode = ProcessMode.Default
+        self.config_mode = ConfigMode.Default
+        self.InteractionState = None
+        for ( process_mode, interaction_state, swidget ) in self.currentSliders.values():
+            swidget.SetEnabled( 0 ) 
+
+    def processInteractionEvent( self, obj=None, event=None ):
+#        print " processInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            srep = obj.GetRepresentation( ) 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep.GetValue() ] )                         
+#         else:
+#             if self.process_mode == ProcessMode.Slicing:
+#                 ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
+#                 slice_pos = swidget.GetRepresentation( ).GetValue()
+#                 self.pushSlice( slice_pos )         
+
+    def processStartInteractionEvent( self, obj, event ): 
+        slider_index = self.checkInteractionState( obj, event ) 
+#        print " processStartInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "StartConfig", slider_index ] )  
+#         else:   
+#             if self.process_mode == ProcessMode.Slicing:
+#                 self.setRenderMode( ProcessMode.LowRes )
+                
+    def checkInteractionState( self, obj, event ):
+        for item in self.currentSliders.items():
+            ( process_mode, interaction_state, swidget ) = item[1]
+            if ( id( swidget ) == id( obj ) ): 
+                if self.InteractionState <> interaction_state:            
+                    self.processEndInteractionEvent( obj, event )
+                    if self.InteractionState <> None: self.endInteraction()
+                    self.InteractionState = interaction_state
+                    self.process_mode = process_mode
+                    print "Change Interaction State: %s %d " % ( self.InteractionState, self.process_mode )
+                return item[0]
+        return None
+            
+    def getSliderIndex(self, obj ):
+        for index in self.currentSliders:
+            ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
+            if ( id( swidget ) == id( obj ) ): return index
+        return None
+
+    def processEndInteractionEvent( self, obj, event ):  
+#        print " processEndInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "EndConfig" ] )  
 
     def displayEventType(self, caller, event):
         print " --> Event: %s " % event 
@@ -154,12 +279,16 @@ class DV3DPlot():
         return 0
 
     def processKeyEvent( self, key, caller=None, event=None ):
-        ( state, persisted ) =  self.getInteractionState( key )
-#            print " %s Set Interaction State: %s ( currently %s) " % ( str(self.__class__), state, self.InteractionState )
-        if state <> None: 
-            print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
-            self.updateInteractionState( state, self.isAltMode  )                 
-            self.isAltMode = False 
+        keysym = caller.GetKeySym()
+        if self.onKeyEvent( [ key, keysym ] ):
+            pass
+        else:
+            ( state, persisted ) =  self.getInteractionState( key )
+    #            print " %s Set Interaction State: %s ( currently %s) " % ( str(self.__class__), state, self.InteractionState )
+            if state <> None: 
+                print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
+                self.updateInteractionState( state  )                 
+                self.isAltMode = False 
         return 0
 
     def onLeftButtonPress( self, caller, event ):
@@ -249,7 +378,7 @@ class DV3DPlot():
             if configFunct.matches( key ): return ( configFunct.name, configFunct.persisted )
         return ( None, None )    
 
-    def updateInteractionState( self, state, altMode ):    
+    def updateInteractionState( self, state ):    
         rcf = None
         if state == None: 
             self.finalizeLeveling()
@@ -269,7 +398,17 @@ class DV3DPlot():
                 configFunct.open( state )
                 self.InteractionState = state                   
                 self.LastInteractionState = self.InteractionState
-                self.disableVisualizationInteraction()
+                self.disableVisualizationInteraction()               
+                if (configFunct.type == 'slider'):
+                    configFunct.processInteractionEvent( [ "InitConfig" ] )
+                    tvals = configFunct.value.getValues()
+                    for slider_index in range(2):
+                        if slider_index < len(configFunct.sliderLabels):
+                            self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.range_bounds, tvals[slider_index]  ) # config_funct.initial_value[slider_index] )
+                        else:
+                            self.releaseSlider( slider_index )
+                self.render()
+
             elif state == 'colorbar':
                 self.toggleColormapVisibility()                        
             elif state == 'reset':

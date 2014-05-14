@@ -7,9 +7,70 @@ Created on Nov 21, 2011
 import vtk, sys, os, copy, time, traceback
 import cdms2, cdtime, cdutil, MV2, cPickle 
 PortDataVersion = 0
-from ConfigFunctions import *
+from ConfigurationFunctions import *
 from StructuredDataset import *
-                   
+ 
+class OutputRecManager: 
+    
+    sep = ';#:|!'   
+            
+    def __init__( self, serializedData = None ): 
+        self.outputRecs = {}
+        if serializedData <> None:
+            self.deserialize( serializedData )
+            
+    def deleteOutput( self, dsid, outputName ):
+        orecMap =  self.outputRecs.get( dsid, None )
+        if orecMap: del orecMap[outputName] 
+
+    def addOutputRec( self, dsid, orec ): 
+        orecMap =  self.outputRecs.setdefault( dsid, {} )
+        orecMap[ orec.name ] = orec
+
+    def getOutputRec( self, dsid, outputName ):
+        orecMap =  self.outputRecs.get( dsid, None )
+        return orecMap[ outputName ] if orecMap else None
+
+    def getOutputRecNames( self, dsid  ): 
+        orecMap =  self.outputRecs.get( dsid, None )
+        return orecMap.keys() if orecMap else []
+
+    def getOutputRecs( self, dsid ):
+        orecMap =  self.outputRecs.get( dsid, None )
+        return orecMap.values() if orecMap else []
+    
+class OutputRec:
+    
+    def __init__(self, name, **args ): 
+        self.name = name
+        self.varComboList = args.get( "varComboList", [] )
+        self.levelsCombo = args.get( "levelsCombo", None )
+        self.level = args.get( "level", None )
+        self.varTable = args.get( "varTable", None )
+        self.varList = args.get( "varList", None )
+        self.varSelections = args.get( "varSelections", [] )
+        self.type = args.get( "type", None )
+        self.ndim = args.get( "ndim", 3 )
+        self.updateSelections() 
+
+    def getVarList(self):
+        vlist = []
+        for vrec in self.varList:
+            vlist.append( str( getItem( vrec ) ) )
+        return vlist
+    
+    def getSelectedVariableList(self):
+        return [ str( varCombo.currentText() ) for varCombo in self.varComboList ]
+
+    def getSelectedLevel(self):
+        return str( self.levelsCombo.currentText() ) if self.levelsCombo else None
+    
+    def updateSelections(self):
+        self.varSelections = []
+        for varCombo in self.varComboList:
+            varSelection = str( varCombo.currentText() ) 
+            self.varSelections.append( [ varSelection, "" ] )
+                  
 class StructuredDataReader:
 
     dataCache = {}

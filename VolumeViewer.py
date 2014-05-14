@@ -9,7 +9,7 @@ from ColorMapManager import *
 from Shapefile import shapeFileReader     
 from DistributedPointCollections import kill_all_zombies
 from StructuredGridPlot import  *
-from ConfigFunctions import *
+#from ConfigFunctions import *
 import numpy as np
 
 LegacyAbsValueTransferFunction = 0
@@ -112,14 +112,105 @@ class VolumePlot(StructuredGridPlot):
         self.transFunctGraphVisible = False
         self.transferFunctionConfig = None
 #        self.setupTransferFunctionConfigDialog()
-        self.addConfigurableLevelingFunction( 'colorScale',    'C', label='Colormap Scale', units='data', setLevel=self.generateCTF, getLevel=self.getSgnRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
-        self.addConfigurableLevelingFunction( 'functionScale', 'T', label='Transfer Function Scale', units='data', setLevel=self.generateOTF, getLevel=self.getAbsRangeBounds, layerDependent=True, adjustRangeInput=0, initRefinement=[ self.refinement[0], self.refinement[1] ], gui=self.transferFunctionConfig, group=ConfigGroup.Rendering  )
-        self.addConfigurableLevelingFunction( 'opacityScale',  'o', label='Transfer Function Opacity', setLevel=self.adjustOpacity, layerDependent=True, group=ConfigGroup.Rendering  )
+        self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
+#       self.addConfigurableLevelingFunction( 'colorScale',    'C', label='Colormap Scale', units='data', setLevel=self.generateCTF, getLevel=self.getSgnRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
+        self.addConfigurableSliderFunction( 'functionScale', 'T', label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
+#        self.addConfigurableLevelingFunction( 'functionScale', 'T', label='Transfer Function Scale', units='data', setLevel=self.generateOTF, getLevel=self.getAbsRangeBounds, layerDependent=True, adjustRangeInput=0, initRefinement=[ self.refinement[0], self.refinement[1] ], gui=self.transferFunctionConfig, group=ConfigGroup.Rendering  )
+        self.addConfigurableSliderFunction( 'opacityScale', 'o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+#        self.addConfigurableLevelingFunction( 'opacityScale',  'o', label='Transfer Function Opacity', setLevel=self.adjustOpacity, layerDependent=True, group=ConfigGroup.Rendering  )
 #        self.addConfigurableMethod( 'showTransFunctGraph', self.showTransFunctGraph, 'g', label='Transfer Function Graph', group=ConfigGroup.Rendering )
 #        self.addConfigurableBooleanFunction( 'cropRegion', self.toggleClipping, 'X', labels='Start Cropping|End Cropping', signature=[ ( Float, 'xmin'), ( Float, 'xmax'), ( Float, 'ymin'), ( Float, 'ymax'), ( Float, 'zmin'), ( Float, 'zmax') ], group=ConfigGroup.Display )
-        self.addConfigurableLevelingFunction( 'zScale', 'z', label='Vertical Scale', setLevel=self.setInputZScale, activeBound='max', getLevel=self.getScaleBounds, windowing=False, sensitivity=(10.0,10.0), initRange=[ 2.0, 2.0, 1 ], group=ConfigGroup.Display )
+#        self.addConfigurableLevelingFunction( 'zScale', 'z', label='Vertical Scale', setLevel=self.setInputZScale, activeBound='max', getLevel=self.getScaleBounds, windowing=False, sensitivity=(10.0,10.0), initRange=[ 2.0, 2.0, 1 ], group=ConfigGroup.Display )
 #        self.addUVCDATConfigGuiFunction( 'renderType', VolumeRenderCfgDialog, 'v', label='Choose Volume Renderer', setValue=self.setVolRenderCfg, getValue=self.getVolRenderCfg, layerDependent=True, group=ConfigGroup.Rendering )
 
+    def processVerticalScalingCommand( self, args, config_function ):
+        verticalScale = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            self.setInputZScale( config_function.initial_value )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            vscale = verticalScale.getValues()
+            vscale[ args[1] ] = args[2]
+            self.setInputZScale( vscale )
+            verticalScale.setValues( vscale )
+
+    def processOpacityScalingCommand( self, args, config_function = None ):
+        opacityRange = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            self.adjustOpacity( config_function.initial_value )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            vt_range = self.getSgnRangeBounds()
+            vt_range[ args[1] ] = args[2]
+            self.adjustOpacity( vt_range )
+            opacityRange.setValues( vt_range )
+
+    def processColorScaleCommand( self, args, config_function = None ):
+        colorScaleRange = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            init_range = self.getSgnRangeBounds()
+            config_function.range_bounds = init_range  
+            config_function.initial_value = init_range  
+            self.generateCTF( init_range )
+            colorScaleRange.setValues( init_range )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            vt_range = self.getSgnRangeBounds()
+            vt_range[ args[1] ] = args[2]
+            self.generateCTF( vt_range )
+            colorScaleRange.setValues( vt_range )
+
+    def processThresholdRangeCommand( self, args, config_function = None ):
+        volumeThresholdRange = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            init_range = self.getSgnRangeBounds()
+            config_function.range_bounds = init_range  
+            config_function.initial_value = init_range  
+            self.generateOTF( init_range )
+            volumeThresholdRange.setValues( init_range )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            vt_range = self.getSgnRangeBounds()
+            vt_range[ args[1] ] = args[2]
+            self.generateOTF( vt_range )
+            volumeThresholdRange.setValues( vt_range )
+ 
     def resetCamera(self):
         self.cropRegion = self.getVolumeBounds()
         self.cropZextent = None
@@ -361,7 +452,9 @@ class VolumePlot(StructuredGridPlot):
 #        self.clipper.AddObserver( 'AnyEvent', self.clipObserver )
         
 #        self.volumeMapper.SetScalarModeToUsePointFieldData()
-#        self.inputModule.inputToAlgorithm( self.volumeMapper )
+
+#         if vtk.VTK_MAJOR_VERSION <= 5:  self.volumeMapper.SetInput(self.input())
+#         else:                           self.volumeMapper.SetInputData(self.input())        
            
         # The volume holds the mapper and the property and can be used to
         # position/orient the volume

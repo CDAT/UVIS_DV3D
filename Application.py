@@ -8,7 +8,7 @@ from PointCloudViewer import CPCPlot
 from VolumeViewer import VolumePlot
 from ConfigurationFunctions import PlotType
 
-class DV3D_Main:
+class DV3D:
     
     def __init__( self, **args ):
         self.use_gui = args.get( 'gui', False )

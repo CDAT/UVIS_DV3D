@@ -12,6 +12,52 @@ from weakref import WeakSet, WeakKeyDictionary
 SLICE_WIDTH_LR_COMP = [ 'xlrwidth', 'ylrwidth', 'zlrwidth' ]
 SLICE_WIDTH_HR_COMP = [ 'xhrwidth', 'yhrwidth', 'zhrwidth' ]
 
+packagePath = os.path.dirname( __file__ )  
+defaultMapDir = os.path.join( packagePath, 'data' )
+defaultOutlineMapFile = os.path.join( defaultMapDir,  'political_map.png' )
+
+packagePath = os.path.dirname( __file__ )  
+defaultMapDir = os.path.join( packagePath, 'data' )
+defaultLogoFile = os.path.join( defaultMapDir,  'uvcdat.jpg' )
+defaultMapFile = os.path.join( defaultMapDir,  'earth2k.jpg' )
+defaultMapCut = -180
+SLIDER_MAX_VALUE = 100
+MAX_IMAGE_SIZE = 1000000
+
+class CDMSDataType:
+    Volume = 1
+    Slice = 2
+    Vector = 3
+    Hoffmuller = 4
+    ChartData = 5
+    VariableSpace = 6
+    Points = 7
+
+class DataCache():
+    
+    def __init__(self):
+        self.data = {}
+        self.cells = set()
+        
+def getDatatypeString( scalar_dtype ):
+    if scalar_dtype == np.ushort:
+        return 'UShort' 
+    if scalar_dtype == np.ubyte:
+        return 'UByte' 
+    if scalar_dtype == np.float32:
+        return 'Float' 
+    if scalar_dtype == np.float64:
+        return 'Double' 
+    return None
+
+def getBool( val ):
+    if isinstance( val, str ):
+        if( val.lower()[0] == 't' ): return True
+        if( val.lower()[0] == 'f' ): return False
+        try:    val = int(val)
+        except: pass
+    return bool( val )
+
 def makeList( obj, minSize = 1 ):
     if obj == None: return None
     if isinstance( obj, tuple ): obj = list( obj ) 
@@ -37,6 +83,19 @@ def get_value_decl( val ):
     if isinstance( val, int ): return "int"
     if isinstance( val, float ): return "float"
     return "str"
+
+def getMaxScalarValue( scalar_dtype ):
+    if scalar_dtype == np.ushort:
+        return 65535.0
+    if scalar_dtype == np.ubyte:
+        return 255.0 
+    if scalar_dtype == np.float32:
+        f = np.finfo(np.float32) 
+        return f.max
+    if scalar_dtype == np.float64:
+        f = np.finfo(np.float64) 
+        return f.max
+    return None
 
 class PlotType:
     Planar = 0
@@ -65,6 +124,21 @@ class PlotType:
                 return cls.Grid
         return cls.List  
 
+def isDesignated( axis ):
+    return ( axis.isLatitude() or axis.isLongitude() or axis.isLevel() or axis.isTime() )
+
+def matchesAxisType( axis, axis_attr, axis_aliases ):
+    matches = False
+    aname = axis.id.lower()
+    axis_attribute = axis.attributes.get('axis',None)
+    if axis_attribute and ( axis_attribute.lower() in axis_attr ):
+        matches = True
+    else:
+        for axis_alias in axis_aliases:
+            if ( aname.find( axis_alias ) >= 0): 
+                matches = True
+                break
+    return matches
 class SIGNAL(object):
     
     def __init__( self, name = None ):
@@ -415,4 +489,386 @@ class ConfigurableSliderFunction( ConfigurableFunction ):
             for index, value in enumerate( self.initial_value ):
                 self.value.setValue( index, value )
         
-   
+def getTitle( dsid, name, attributes, showUnits=False ):
+    long_name = attributes.get( 'long_name', attributes.get( 'standard_name', name ) )
+    if not showUnits: return "%s:%s" % ( dsid, long_name )
+    units = attributes.get( 'units', 'unitless' )
+    return  "%s:%s (%s)" % ( dsid, long_name, units )
+
+def getNewVtkDataArray( scalar_dtype ):
+    if scalar_dtype == np.ushort:
+        return vtk.vtkUnsignedShortArray() 
+    if scalar_dtype == np.ubyte:
+        return vtk.vtkUnsignedCharArray() 
+    if scalar_dtype == np.float32:
+        return vtk.vtkFloatArray() 
+    if scalar_dtype == np.float64:
+        return vtk.vtkDoubleArray() 
+    return None
+
+def getStringDataArray( name, values = [] ):
+    array = vtk.vtkStringArray()
+    array.SetName( name )
+    for value in values:
+        array.InsertNextValue( value )
+    return array
+
+def encodeToString( obj ):
+    rv = None
+    try:
+        buffer = StringIO()
+        pickler = cPickle.Pickler( buffer )
+        pickler.dump( obj )
+        rv = buffer.getvalue()
+        buffer.close()
+    except Exception, err:
+        print>>sys.stderr, "Error pickling object %s: %s" % ( str(obj), str(err) )
+    return rv
+
+def decodeFromString( string_value, default_value=None ):
+    obj = default_value
+    try:
+        buffer = StringIO( string_value )
+        pickler = cPickle.Unpickler( buffer )
+        obj = pickler.load()
+        buffer.close()
+    except Exception, err:
+        print>>sys.stderr, "Error unpickling string %s: %s" % ( string_value, str(err) )
+    return obj
+  
+class InputSpecs:
+    
+    def __init__( self, **args ):
+        self.units = ''
+        self.scalarRange = None
+        self.seriesScalarRange = None
+        self.rangeBounds = None
+        self.referenceTimeUnits = None
+        self.metadata = None
+        self._input = None
+        self.fieldData = None
+        self.datasetId = None
+        self.clipper = None
+        self.dtype = None
+        
+    def isFloat(self):
+        return self.dtype == "Float"
+
+#     def selectInputArray( self, raw_input, plotIndex ):
+#         self.updateMetadata( plotIndex )
+#         old_point_data = raw_input.GetPointData()  
+#         nArrays = old_point_data.GetNumberOfArrays() 
+#         if nArrays == 1: return raw_input  
+#         image_data = vtk.vtkImageData()
+#         image_data.ShallowCopy( raw_input )
+#         new_point_data = image_data.GetPointData()        
+#         array_index = plotIndex if plotIndex < nArrays else 0
+#         inputVarList = self.metadata.get( 'inputVarList', [] )
+#         if array_index < len( inputVarList ):
+#             aname = inputVarList[ array_index ] 
+#             new_point_data.SetActiveScalars( aname )
+# #            print "Selecting scalars array %s for input %d" % ( aname, array_index )
+#         else:
+#             print>>sys.stderr, "Error, can't find scalars array for input %d" % array_index
+# #        print "Selecting %s (array-%d) for plot index %d" % ( aname, array_index, plotIndex)
+#         return image_data
+ 
+    def initializeInput( self, imageData, fieldData, plotIndex=0 ): 
+        self._input =  imageData 
+        self.fieldData = fieldData                          
+        self.updateMetadata( plotIndex )
+        
+    def input( self ):
+        if self.clipper:
+            input = self.clipper.GetOutput()
+            input.Update()
+            return input
+        return self._input
+        
+    def clipInput( self, extent ):
+        self.clipper = vtk.vtkImageClip()
+        self.clipper.AddInput( self._input )
+        self.clipper.SetOutputWholeExtent( extent )
+
+    def getWorldCoords( self, image_coords ):
+        plotType = self.metadata[ 'plotType' ]                   
+        world_coords = None
+        try:
+            if plotType == 'zyt':
+                lat = self.metadata[ 'lat' ]
+                lon = self.metadata[ 'lon' ]
+                timeAxis = self.metadata[ 'time' ]
+                tval = timeAxis[ image_coords[2] ]
+                relTimeValue = cdtime.reltime( float( tval ), timeAxis.units ) 
+                timeValue = str( relTimeValue.tocomp() )          
+                world_coords = [ getFloatStr(lon[ image_coords[0] ]), getFloatStr(lat[ image_coords[1] ]), timeValue ]   
+            else:         
+                lat = self.metadata[ 'lat' ]
+                lon = self.metadata[ 'lon' ]
+                lev = self.metadata[ 'lev' ]
+                world_coords = [ getFloatStr(lon[ image_coords[0] ]), getFloatStr(lat[ image_coords[1] ]), getFloatStr(lev[ image_coords[2] ]) ]   
+        except:
+            gridSpacing = self.input().GetSpacing()
+            gridOrigin = self.input().GetOrigin()
+            world_coords = [ getFloatStr(gridOrigin[i] + image_coords[i]*gridSpacing[i]) for i in range(3) ]
+        return world_coords
+
+    def getWorldCoordsAsFloat( self, image_coords ):
+        plotType = self.metadata[ 'plotType' ]                   
+        world_coords = None
+        try:
+            if plotType == 'zyt':
+                lat = self.metadata[ 'lat' ]
+                lon = self.metadata[ 'lon' ]
+                timeAxis = self.metadata[ 'time' ]
+                tval = timeAxis[ image_coords[2] ]
+                relTimeValue = cdtime.reltime( float( tval ), timeAxis.units ) 
+                timeValue = str( relTimeValue.tocomp() )          
+                world_coords = [ lon[ image_coords[0] ], lat[ image_coords[1] ], timeValue ]   
+            else:         
+                lat = self.metadata[ 'lat' ]
+                lon = self.metadata[ 'lon' ]
+                lev = self.metadata[ 'lev' ]
+                world_coords = [ lon[ image_coords[0] ], lat[ image_coords[1] ], lev[ image_coords[2] ] ]   
+        except:
+            gridSpacing = self.input().GetSpacing()
+            gridOrigin = self.input().GetOrigin()
+            world_coords = [ gridOrigin[i] + image_coords[i]*gridSpacing[i] for i in range(3) ]
+        return world_coords
+    
+    def getWorldCoord( self, image_coord, iAxis, latLonGrid  ):
+        plotType = self.metadata[ 'plotType' ] 
+        if plotType == 'zyt':                  
+            axisNames = [ 'Longitude', 'Latitude', 'Time' ] if latLonGrid else [ 'X', 'Y', 'Time' ]
+        else:
+            axisNames =  [ 'Longitude', 'Latitude', 'Level' ] if latLonGrid else [ 'X', 'Y', 'Level' ]
+        try:
+            axes = [ 'lon', 'lat', 'time' ] if plotType == 'zyt'  else [ 'lon', 'lat', 'lev' ]
+            world_coord = self.metadata[ axes[iAxis] ][ image_coord ]
+            if ( plotType == 'zyt') and  ( iAxis == 2 ):
+                timeAxis = self.metadata[ 'time' ]     
+                timeValue = cdtime.reltime( float( world_coord ), timeAxis.units ) 
+                world_coord = str( timeValue.tocomp() )          
+            return axisNames[iAxis], getFloatStr( world_coord )
+        except:
+            if (plotType == 'zyx') or (iAxis < 2):
+                gridSpacing = self.input().GetSpacing()
+                gridOrigin = self.input().GetOrigin()
+                return axes[iAxis], getFloatStr( gridOrigin[iAxis] + image_coord*gridSpacing[iAxis] ) 
+            return axes[iAxis], ""
+
+    def getRangeBounds( self ):
+        if self.dtype == "Float": 
+            return self.scalarRange
+        return self.rangeBounds  
+        
+    def getDataRangeBounds(self):
+        if self.dtype == "Float":
+            return self.scalarRange
+        if self.rangeBounds:
+            srange = self.getDataValues( self.rangeBounds[0:2] ) 
+            if ( len( self.rangeBounds ) > 2 ): srange.append( self.rangeBounds[2] ) 
+            else:                               srange.append( 0 )
+        else: srange = [ 0, 0, 0 ]
+        return srange
+        
+    def raiseModuleError( self, msg ):
+        print>>sys.stderr, msg
+        raise Exception( msg )
+
+    def getDataValue( self, image_value):
+        if self.isFloat(): return image_value
+        if not self.scalarRange: 
+            self.raiseModuleError( "ERROR: no variable selected in dataset input to module %s" % getClassName( self ) )
+        valueRange = self.scalarRange
+        sval = ( float(image_value) - self.rangeBounds[0] ) / ( self.rangeBounds[1] - self.rangeBounds[0] )
+        dataValue = valueRange[0] + sval * ( valueRange[1] - valueRange[0] ) 
+#        print " GetDataValue(%.3G): valueRange = %s " % ( sval, str( valueRange ) )
+        return dataValue
+                
+    def getDataValues( self, image_value_list ):
+        if self.isFloat(): return image_value_list
+        if not self.scalarRange: 
+            self.raiseModuleError( "ERROR: no variable selected in dataset input to module %s" % getClassName( self ) )
+        valueRange = self.scalarRange
+        dr = ( self.rangeBounds[1] - self.rangeBounds[0] )
+        data_values = []
+        for image_value in image_value_list:
+            sval = 0.0 if ( dr == 0.0 ) else ( image_value - self.rangeBounds[0] ) / dr
+            dataValue = valueRange[0] + sval * ( valueRange[1] - valueRange[0] ) 
+            data_values.append( dataValue )
+        return data_values
+
+    def getImageValue( self, data_value ):
+        if not self.scalarRange: 
+            self.raiseModuleError( "ERROR: no variable selected in dataset input to module %s" % getClassName( self ) )
+        valueRange = self.scalarRange
+        dv = ( valueRange[1] - valueRange[0] )
+        sval = 0.0 if ( dv == 0.0 ) else ( data_value - valueRange[0] ) / dv 
+        imageValue = self.rangeBounds[0] + sval * ( self.rangeBounds[1] - self.rangeBounds[0] ) 
+        return imageValue
+
+    def getImageValues( self, data_value_list ):
+        if self.isFloat(): return data_value_list
+        if not self.scalarRange: 
+            self.raiseModuleError( "ERROR: no variable selected in dataset input to module %s" % getClassName( self ) )
+        valueRange = self.scalarRange
+        dv = ( valueRange[1] - valueRange[0] )
+        imageValues = []
+        for data_value in data_value_list:
+            sval = 0.0 if ( dv == 0.0 ) else ( data_value - valueRange[0] ) / dv
+            imageValue = self.rangeBounds[0] + sval * ( self.rangeBounds[1] - self.rangeBounds[0] ) 
+            imageValues.append( imageValue )
+#        print "\n *****************  GetImageValues: data_values = %s, range = %s, imageValues = %s **************** \n" % ( str(data_value_list), str(self.scalarRange), str(imageValues) )
+        return imageValues
+
+    def scaleToImage( self, data_value ):
+        if self.isFloat(): return data_value
+        if not self.scalarRange: 
+            self.raiseModuleError( "ERROR: no variable selected in dataset input to module %s" % getClassName( self ) )
+        dv = ( self.scalarRange[1] - self.scalarRange[0] )
+        sval = 0.0 if ( dv == 0.0 ) else data_value / dv
+        imageScaledValue =  sval * ( self.rangeBounds[1] - self.rangeBounds[0] ) 
+        return imageScaledValue
+
+    def getMetadata( self, key = None ):
+        return self.metadata.get( key, None ) if ( key and self.metadata )  else self.metadata
+  
+    def getFieldData( self ):
+        if self.fieldData == None:
+            print>>sys.stderr, ' Uninitialized field data being accessed in ispec[%x]  ' % id(self)  
+            self.initializeMetadata()
+        return self.fieldData  
+    
+    def updateMetadata( self, plotIndex ):
+        if self.metadata == None:
+            scalars = None
+             
+#            arr_names = [] 
+#            na = self.fieldData.GetNumberOfArrays()
+#            for iF in range( na ):
+#                arr_names.append( self.fieldData.GetArrayName(iF) )
+#            print " updateMetadata: getFieldData, arrays = ", str( arr_names ) ; sys.stdout.flush()
+            
+            if self.fieldData == None:
+                print>>sys.stderr,  ' NULL field data in updateMetadata: ispec[%x]  ' % id(self)  
+                self.initializeMetadata() 
+    
+            self.metadata = self.computeMetadata( plotIndex )
+            
+            if self.metadata <> None:
+                self.rangeBounds = None              
+                self.datasetId = self.metadata.get( 'datasetId', None )                
+                tval = self.metadata.get( 'timeValue', 0.0 )
+                self.referenceTimeUnits = self.metadata.get( 'timeUnits', None )
+                self.timeValue = cdtime.reltime( float( tval ), self.referenceTimeUnits ) if tval else None              
+                self.dtype =  self.metadata.get( 'datatype', None )
+                scalars =  self.metadata.get( 'scalars', None )
+                self.rangeBounds = getRangeBounds( self.dtype )
+                title = self.metadata.get( 'title', None )
+                if title:
+                    targs = title.split(':')
+                    if len( targs ) == 1:
+                        self.titleBuffer = "\n%s" % ( title )
+                    elif len( targs ) > 1:
+                        self.titleBuffer = "%s\n%s" % ( targs[1], targs[0] )
+                else: self.titleBuffer = "" 
+                attributes = self.metadata.get( 'attributes' , None )
+                if attributes:
+                    self.units = attributes.get( 'units' , '' )
+                    srange = attributes.get( 'range', None )
+                    if srange: 
+        #                print "\n ***************** ScalarRange = %s, md[%d], var_md[%d] *****************  \n" % ( str(range), id(metadata), id(var_md) )
+                        self.scalarRange = list( srange )
+                        self.scalarRange.append( 1 )
+                        if not self.seriesScalarRange:
+                            self.seriesScalarRange = list(srange)
+                        else:
+                            if self.seriesScalarRange[0] > srange[0]:
+                                self.seriesScalarRange[0] = srange[0] 
+                            if self.seriesScalarRange[1] < srange[1]:
+                                self.seriesScalarRange[1] = srange[1] 
+
+    def getUnits(self):
+        return self.units
+    
+    def getLayerList(self):
+        layerList = []
+        pointData = self.input().GetPointData()
+        for iA in range( pointData.GetNumberOfArrays() ):
+            array_name = pointData.GetArrayName(iA)
+            if array_name: layerList.append( array_name )
+        return layerList
+    
+    def computeMetadata( self, plotIndex=0 ):
+        if not self.fieldData: self.initializeMetadata() 
+        if self.fieldData:
+            mdList = extractMetadata( self.fieldData )
+            if plotIndex < len(mdList):
+                return mdList[ plotIndex ]
+            else:
+                try: return mdList[ 0 ]
+                except: pass               
+        print>>sys.stderr, "[%s]: Error, Metadata for input %d not found in ispec[%x]  "  % ( self.__class__.__name__,  plotIndex, id(self) )
+        return {}
+        
+    def addMetadataObserver( self, caller, event ):
+        fd = caller.GetOutput().GetFieldData()
+        fd.ShallowCopy( self.fieldData )
+        pass
+
+    def initializeMetadata( self ):
+        try:
+            self.fieldData = vtk.vtkDataSetAttributes()
+            mdarray = getStringDataArray( 'metadata' )
+            self.fieldData.AddArray( mdarray )
+#            diagnosticWriter.log( self, ' initialize field data in ispec[%x]  ' % id(self) )  
+        except Exception, err:
+            print>>sys.stderr, "Error initializing metadata"
+
+    def addMetadata( self, metadata ):
+        dataVector = self.fieldData.GetAbstractArray( 'metadata' ) 
+        if dataVector == None:
+            cname = getClassName( self ) 
+            if cname <> "InputSpecs": print " Can't get Metadata for class %s " % cname
+        else:
+            enc_mdata = encodeToString( metadata )
+            dataVector.InsertNextValue( enc_mdata  )
+            
+def getClassName( instance ):
+    return instance.__class__.__name__ if ( instance <> None ) else "None" 
+
+def getRangeBounds( type_str ):
+    if type_str == 'UShort':
+        return [ 0, 65535, 1 ]
+    if type_str == 'UByte':
+        return [ 0, 255, 1 ] 
+    if type_str == 'Float':
+        f = np.finfo(float) 
+        return [ -f.max, f.max, 1 ]
+    return None
+
+def extractMetadata( fieldData ):
+    mdList = []
+    inputVarList = []
+    varlist = fieldData.GetAbstractArray( 'varlist' ) 
+    if varlist == None:   # module.getFieldData() 
+        print>>sys.stderr, " Can't get Metadata!" 
+    else: 
+        nvar = varlist.GetNumberOfValues()
+        for vid in range(nvar):
+            varName = str( varlist.GetValue(vid) )
+            inputVarList.append( varName )
+            dataVector = fieldData.GetAbstractArray( 'metadata:%s' % varName ) 
+            if dataVector == None:  
+                print>>sys.stderr, " Can't get Metadata for var %s!" % varName 
+            else: 
+                metadata = {}
+                nval = dataVector.GetNumberOfValues()
+                for id in range(nval):
+                    enc_mdata = str( dataVector.GetValue(id) )
+                    md = decodeFromString( enc_mdata )
+                    metadata.update( md )
+                mdList.append( metadata )
+        for md in mdList: md['inputVarList'] = inputVarList
+    return mdList 
