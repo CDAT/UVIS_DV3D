@@ -6,6 +6,7 @@ Created on May 13, 2014
 import cdms2
 from PointCloudViewer import CPCPlot
 from VolumeViewer import VolumePlot
+from SliceViewer import SlicePlot
 from ConfigurationFunctions import PlotType
 
 class DV3D:
@@ -28,7 +29,8 @@ class DV3D:
         plot_type = PlotType.getPointsLayout( grid_metadata )
         
         if plot_type == PlotType.Grid:
-            g = VolumePlot(gui=self.use_gui) 
+            g = SlicePlot(gui=self.use_gui) 
+#            g = VolumePlot(gui=self.use_gui) 
             g.init( **args ) 
         else:
             g = CPCPlot(gui=self.use_gui) 

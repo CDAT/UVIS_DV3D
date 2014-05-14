@@ -7,7 +7,7 @@ from ColorMapManager import *
 from ConfigurationFunctions import *
 import vtk, traceback
 MIN_LINE_LEN = 50
-VTK_NOTATION_SIZE = 14
+VTK_NOTATION_SIZE = 10
 
 class ProcessMode:
     Default = 0
@@ -59,11 +59,11 @@ class TextDisplayMgr:
     def createTextActor( self, aid, **args ):
         textActor = vtk.vtkTextActor()  
         textActor.SetTextScaleMode( vtk.vtkTextActor.TEXT_SCALE_MODE_PROP )  
-#        textActor.SetMaximumLineHeight( 0.4 )       
+        textActor.SetMaximumLineHeight( 0.1 )       
         textprop = textActor.GetTextProperty()
         textprop.SetColor( *args.get( 'color', ( VTK_FOREGROUND_COLOR[0], VTK_FOREGROUND_COLOR[1], VTK_FOREGROUND_COLOR[2] ) ) )
         textprop.SetOpacity ( args.get( 'opacity', 1.0 ) )
-        textprop.SetFontSize( args.get( 'size', 10 ) )
+        textprop.SetFontSize( 8 )
         if args.get( 'bold', False ): textprop.BoldOn()
         else: textprop.BoldOff()
         textprop.ItalicOff()
@@ -118,7 +118,7 @@ class DV3DPlot():
         self.LastInteractionState = None
         self.colormapManagers= {}
         self.currentSliders = {} 
-        self.addConfigurableSliderFunction( 'zScale', 'z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
+        self.addConfigurableSliderFunction( 'zScale', 'Z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
 
     def addConfigurableFunction(self, name, function_args, key, **args):
         self.configurableFunctions[name] = ConfigurableFunction( name, function_args, key, **args )
@@ -352,7 +352,7 @@ class DV3DPlot():
         if render: self.render()     
 
     def getLabelActor(self):
-        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.01, .90), size = VTK_NOTATION_SIZE, bold = True  ) if self.textDisplayMgr else None
+        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.01, .90), bold = False  ) if self.textDisplayMgr else None
     
     def UpdateCamera(self):
         pass

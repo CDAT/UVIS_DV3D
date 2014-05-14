@@ -123,25 +123,6 @@ class VolumePlot(StructuredGridPlot):
 #        self.addConfigurableLevelingFunction( 'zScale', 'z', label='Vertical Scale', setLevel=self.setInputZScale, activeBound='max', getLevel=self.getScaleBounds, windowing=False, sensitivity=(10.0,10.0), initRange=[ 2.0, 2.0, 1 ], group=ConfigGroup.Display )
 #        self.addUVCDATConfigGuiFunction( 'renderType', VolumeRenderCfgDialog, 'v', label='Choose Volume Renderer', setValue=self.setVolRenderCfg, getValue=self.getVolRenderCfg, layerDependent=True, group=ConfigGroup.Rendering )
 
-    def processVerticalScalingCommand( self, args, config_function ):
-        verticalScale = config_function.value
-        if args and args[0] == "StartConfig":
-            pass
-        elif args and args[0] == "Init":
-            self.setInputZScale( config_function.initial_value )
-        elif args and args[0] == "EndConfig":
-            pass
-        elif args and args[0] == "InitConfig":
-            self.updateTextDisplay( config_function.label )
-        elif args and args[0] == "Open":
-            pass
-        elif args and args[0] == "Close":
-            pass
-        elif args and args[0] == "UpdateConfig":
-            vscale = verticalScale.getValues()
-            vscale[ args[1] ] = args[2]
-            self.setInputZScale( vscale )
-            verticalScale.setValues( vscale )
 
     def processOpacityScalingCommand( self, args, config_function = None ):
         opacityRange = config_function.value
@@ -158,10 +139,9 @@ class VolumePlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            vt_range = self.getSgnRangeBounds()
-            vt_range[ args[1] ] = args[2]
-            self.adjustOpacity( vt_range )
-            opacityRange.setValues( vt_range )
+            opacityRange.setValue( args[1], args[2] )
+            orange = opacityRange.getValues()
+            self.setOpacity( orange )
 
     def processColorScaleCommand( self, args, config_function = None ):
         colorScaleRange = config_function.value
@@ -182,10 +162,9 @@ class VolumePlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            vt_range = self.getSgnRangeBounds()
-            vt_range[ args[1] ] = args[2]
-            self.generateCTF( vt_range )
-            colorScaleRange.setValues( vt_range )
+            colorScaleRange.setValue( args[1], args[2] )
+            cscale = colorScaleRange.getValues()
+            self.generateCTF( cscale )
 
     def processThresholdRangeCommand( self, args, config_function = None ):
         volumeThresholdRange = config_function.value

@@ -6,7 +6,7 @@ Created on Apr 23, 2014
     
 import vtk, sys, os
 from ColorMapManager import *
-#from ConfigFunctions import *
+from Shapefile import shapeFileReader   
 from StructuredVariableReader import StructuredDataReader
 from DV3DPlot import *
       
@@ -29,10 +29,33 @@ class StructuredGridPlot(DV3DPlot):
         self.baseMapActor = None
         self.enableBasemap = True
         self.map_opacity = [ 0.4, 0.4 ]
+        self.zincSkipIndex = 5
         self.roi = None
+        self.shapefilePolylineActors = {}
+        self.basemapLineSpecs = {}
 
-    def addConfigurableLevelingFunction(self, name, key, **args):
-        self.configurableFunctions[name] = WindowLevelingConfigurableFunction( name, key, **args )
+    def processVerticalScalingCommand( self, args, config_function ):
+        verticalScale = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            self.setZScale( config_function.initial_value )
+            verticalScale.setValue( 'count', 1 )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            count = verticalScale.incrementValue( 'count' )
+            if count % self.zincSkipIndex == 0:
+                vscale = verticalScale.getValues()
+                vscale[ args[1] ] = args[2]
+                self.setZScale( vscale )
+                verticalScale.setValues( vscale )
 
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
@@ -167,6 +190,8 @@ class StructuredGridPlot(DV3DPlot):
                 self.initializeConfiguration( mid=id(self) )  
             else:   
                 self.applyConfiguration()
+                
+        self.render()
 
     def updateModule( self, input_index = 0, **args  ):
         ispec = self.inputSpecs[ input_index ] 
@@ -179,8 +204,43 @@ class StructuredGridPlot(DV3DPlot):
     
     def getScalarRange( self, input_index = 0 ):
         ispec = self.inputSpecs[ input_index ] 
-        return ispec.scalarRange  
+        return ispec.scalarRange
+    
+    def basemapLinesVisibilityOn(self):
+        for actor_list in self.shapefilePolylineActors.values():
+            for actor in actor_list: 
+                if actor: actor.VisibilityOn()  
 
+    def basemapLinesVisibilityOff(self):
+        for actor_list in self.shapefilePolylineActors.values():
+            for actor in actor_list: 
+                if actor: actor.VisibilityOff()  
+
+    def createBasemapPolyline( self, type, **args ):
+        ispec = self.getInputSpec(0)  
+        md = ispec.getMetadata()
+        latLonGrid = md.get( 'latLonGrid', True )
+        if latLonGrid:
+            line_specs = self.basemapLineSpecs.get( type, None )
+            thickness = int( round( line_specs[0] ) ) if line_specs else 0
+            density = int( round( line_specs[1] ) ) if line_specs else 1
+            resTypes = [ "invisible", "low", "medium", "high" ]
+            if (thickness > 0) and ( density > 0 ):
+                rgb=self.getLayerColor( type ) 
+                textFilePath = os.path.join( os.path.dirname(__file__), "data", type, "index.txt" )
+                s=shapeFileReader()
+                s.setColors(rgb)
+                s.setWidth( thickness )
+                polys=s.getPolyLines( self.roi, textFilePath, resTypes[ density ] )        
+                self.renderer.AddActor(polys)
+                origin = self.planeWidgetZ.GetOrigin()
+                pos = polys.GetPosition()
+                pos1 = [ pos[0], pos[1], origin[2] ]
+                polys.SetPosition( pos1 )
+                polys_list = self.shapefilePolylineActors.get( type, [ None, None, None, None, None ] ) 
+                polys_list[ density ] = polys
+                self.shapefilePolylineActors[ type ] = polys_list   
+ 
     def setBasemapLineSpecs( self, shapefile_type, value ):
         self.basemapLineSpecs[shapefile_type] = value
         npixels = int( round( value[0] ) )

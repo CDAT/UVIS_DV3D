@@ -361,8 +361,10 @@ class ConfigParameter:
             vals.append( val )
         return vals
 
-    def incrementValue( self, index, inc ):
-        self.values[ index ] = self.values[ index ] + inc
+    def incrementValue( self, key, inc = 1 ):
+        inc_val = self.values[ key ] + inc
+        self.values[ key ] = inc_val
+        return inc_val
         
     @property
     def rmin(self):
@@ -505,6 +507,10 @@ def getNewVtkDataArray( scalar_dtype ):
     if scalar_dtype == np.float64:
         return vtk.vtkDoubleArray() 
     return None
+
+def getFloatStr( val ):
+    if ( type(val) == type(' ') ): return val
+    return "%.1f" % val
 
 def getStringDataArray( name, values = [] ):
     array = vtk.vtkStringArray()
@@ -837,6 +843,8 @@ class InputSpecs:
             
 def getClassName( instance ):
     return instance.__class__.__name__ if ( instance <> None ) else "None" 
+
+def bound( val, bounds ): return max( min( val, bounds[1] ), bounds[0] )
 
 def getRangeBounds( type_str ):
     if type_str == 'UShort':
