@@ -312,7 +312,7 @@ class CPCPlot( DV3DPlot ):
         elif keysym == "c":  self.toggleClipping()
         elif keysym == "m":  self.toggleRenderMode()
         elif keysym == "v":  self.enableThresholding()
-        elif keysym == "i":  self.setPointIndexBounds( 5000, 7000 )
+#        elif keysym == "i":  self.setPointIndexBounds( 5000, 7000 )
         else: return False
         return True
                         

@@ -106,6 +106,7 @@ class DV3DPlot():
         self.ywidth = 180.0
         self.widget = None
         self.process_mode = ProcessMode.Default
+        self.slider_postions = [ [ [ 0.25, 0.75 ] ], [ [0.01,0.48], [0.52, 0.99 ] ], [ [0.01,0.3], [0.35,0.7], [0.75, 0.99 ] ], [ [0.01,0.24], [0.26,0.49], [0.51,0.74], [0.76, 0.99 ] ]    ]
         
         self.configuring = False
         self.configurableFunctions = {}
@@ -145,12 +146,9 @@ class DV3DPlot():
             
     def createSliderWidget( self, index ): 
         sliderRep = vtk.vtkSliderRepresentation2D()
-        loc = [ [0.01,0.48], [0.52, 0.99 ] ] 
             
         sliderRep.GetPoint1Coordinate().SetCoordinateSystemToNormalizedDisplay()
-        sliderRep.GetPoint1Coordinate().SetValue( loc[index][0], 0.06, 0 )
         sliderRep.GetPoint2Coordinate().SetCoordinateSystemToNormalizedDisplay()
-        sliderRep.GetPoint2Coordinate().SetValue( loc[index][1], 0.06, 0 )
         prop = sliderRep.GetSliderProperty()
         prop.SetColor( 1.0, 0.0, 0.0 )
         prop.SetOpacity( 0.5 )
@@ -178,8 +176,16 @@ class DV3DPlot():
         sliderWidget.AddObserver("EndInteractionEvent", self.processEndInteractionEvent )
         sliderWidget.AddObserver("InteractionEvent", self.processInteractionEvent )
         sliderWidget.KeyPressActivationOff()
-        return sliderWidget 
-            
+        return sliderWidget
+    
+    def positionSliders( self, nsliders ): 
+        slider_pos = self.slider_postions[ nsliders ]
+        for islider in range( nsliders ):
+            ( process_mode, interaction_state, swidget ) = self.currentSliders[islider]
+            sliderRep = swidget.GetRepresentation( ) 
+            sliderRep.GetPoint1Coordinate().SetValue( slider_pos[islider][0], 0.06, 0 )  
+            sliderRep.GetPoint2Coordinate().SetValue( slider_pos[islider][1], 0.06, 0 )
+                        
     def commandeerSlider(self, index, label, bounds, value ): 
         widget_item = self.currentSliders.get( index, None )
         if widget_item == None: 
@@ -203,10 +209,10 @@ class DV3DPlot():
             configFunct = self.configurableFunctions[ self.InteractionState ]
             configFunct.close()   
         self.process_mode = ProcessMode.Default
-        self.config_mode = ConfigMode.Default
         self.InteractionState = None
         for ( process_mode, interaction_state, swidget ) in self.currentSliders.values():
             swidget.SetEnabled( 0 ) 
+        self.render()
 
     def processInteractionEvent( self, obj=None, event=None ):
 #        print " processInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
@@ -402,11 +408,13 @@ class DV3DPlot():
                 if (configFunct.type == 'slider'):
                     configFunct.processInteractionEvent( [ "InitConfig" ] )
                     tvals = configFunct.value.getValues()
-                    for slider_index in range(2):
-                        if slider_index < len(configFunct.sliderLabels):
+                    n_active_sliders = len(configFunct.sliderLabels)
+                    for slider_index in range(4):
+                        if slider_index < n_active_sliders:
                             self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.range_bounds, tvals[slider_index]  ) # config_funct.initial_value[slider_index] )
                         else:
                             self.releaseSlider( slider_index )
+                    self.positionSliders( n_active_sliders )
                 self.render()
 
             elif state == 'colorbar':
@@ -535,7 +543,11 @@ class DV3DPlot():
             self.onResizeEvent()           
             
     def onKeyEvent(self, eventArgs ):
-        pass
+        key = eventArgs[0]
+        keysym =  eventArgs[1]            
+        if keysym == "i":  self.clearInteractions()
+        else: return False
+        return True
 
     def getLUT( self, cmap_index=0  ):
         colormapManager = self.getColormapManager( index=cmap_index )
