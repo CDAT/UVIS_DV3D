@@ -171,26 +171,14 @@ class StructuredGridPlot(DV3DPlot):
         if tval: self.timeValue = cdtime.reltime( float( args[ 'timeValue' ] ), ispec.referenceTimeUnits )
 
     def execute(self, **args ):
-        initConfig = False
-        isAnimation = args.get( 'animate', False )
         if not self.isBuilt(): 
             self.initializeInputs()        
             self.buildPipeline()
             self.buildBaseMap()
+            self.initializeConfiguration() 
             self.pipelineBuilt = True
-            initConfig = True
-            
-        if not initConfig: self.applyConfiguration( **args  )   
-        
-        self.updateModule( **args ) 
-        
-        if not isAnimation:
-# #            self.displayInstructions( "Shift-right-click for config menu" )
-            if initConfig: 
-                self.initializeConfiguration( mid=id(self) )  
-            else:   
-                self.applyConfiguration()
-                
+                           
+        self.updateModule( **args )                
         self.render()
 
     def updateModule( self, input_index = 0, **args  ):
@@ -572,8 +560,12 @@ class StructuredGridPlot(DV3DPlot):
         self.variable_reader = StructuredDataReader( init_args )
         self.variable_reader.execute( )       
         self.execute( )
+        self.initializePlots()
         self.start()
         if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
+        
+    def initializePlots(self):
+        pass
 
     def onResizeEvent(self):
         self.updateTextDisplay( None, True )

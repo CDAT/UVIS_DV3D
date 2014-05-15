@@ -288,7 +288,7 @@ class DV3DPlot():
         return 0
 
     def processKeyEvent( self, key, caller=None, event=None ):
-        keysym = caller.GetKeySym()
+        keysym = caller.GetKeySym() if caller else key
         if self.onKeyEvent( [ key, keysym ] ):
             pass
         else:
@@ -500,7 +500,7 @@ class DV3DPlot():
     
     def updateInteractor(self): 
         return 0    
-    
+ 
     def activateEvent( self, caller, event ):
         if not self.activated:
 #            self.addObserver( self.renderWindowInteractor, 'InteractorEvent', self.displayEventType )                   

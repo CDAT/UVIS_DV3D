@@ -979,6 +979,20 @@ class ImagePlaneWidget:
 #----------------------------------------------------------------------------
 
     def SetSlicePosition( self, position ):
+        planeOrigin = list( self.PlaneSource.GetOrigin() )    
+        planeOrigin[ self.PlaneOrientation ] = position                      
+        point1 = list( self.PlaneSource.GetPoint1() )    
+        point1[ self.PlaneOrientation ] = position                      
+        point2 = list( self.PlaneSource.GetPoint2() )    
+        point2[ self.PlaneOrientation ] = position                      
+        self.PlaneSource.SetOrigin( planeOrigin )
+        self.PlaneSource.SetPoint1( point1 )
+        self.PlaneSource.SetPoint2( point2 )
+        self.UpdatePlane()
+        self.BuildRepresentation()
+        self.Modified()
+
+    def PushSlicePosition( self, position ):
     
         amount = 0.0
         planeOrigin = self.PlaneSource.GetOrigin()
@@ -991,7 +1005,9 @@ class ImagePlaneWidget:
             amount = position - planeOrigin[1]
                 
 #        print " >+++++++++> ImagePlaneWidget[%d].SetSlice: Push=%.2f " % ( self.PlaneIndex, amount )
+        planeOrigin = self.PlaneSource.GetOrigin()
         self.PlaneSource.Push( amount )
+        planeOrigin = self.PlaneSource.GetOrigin()
         self.UpdatePlane()
         self.BuildRepresentation()
         self.Modified()
