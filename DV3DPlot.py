@@ -179,12 +179,15 @@ class DV3DPlot():
         return sliderWidget
     
     def positionSliders( self, nsliders ): 
-        slider_pos = self.slider_postions[ nsliders ]
         for islider in range( nsliders ):
-            ( process_mode, interaction_state, swidget ) = self.currentSliders[islider]
-            sliderRep = swidget.GetRepresentation( ) 
-            sliderRep.GetPoint1Coordinate().SetValue( slider_pos[islider][0], 0.06, 0 )  
-            sliderRep.GetPoint2Coordinate().SetValue( slider_pos[islider][1], 0.06, 0 )
+            self.positionSlider( islider, nsliders )
+            
+    def positionSlider(self, position_index, n_sliders ):
+        slider_pos = self.slider_postions[ n_sliders ]
+        ( process_mode, interaction_state, swidget ) = self.currentSliders[position_index]
+        sliderRep = swidget.GetRepresentation( ) 
+        sliderRep.GetPoint1Coordinate().SetValue( slider_pos[position_index][0], 0.06, 0 )  
+        sliderRep.GetPoint2Coordinate().SetValue( slider_pos[position_index][1], 0.06, 0 )
                         
     def commandeerSlider(self, index, label, bounds, value ): 
         widget_item = self.currentSliders.get( index, None )
@@ -408,13 +411,19 @@ class DV3DPlot():
                 if (configFunct.type == 'slider'):
                     configFunct.processInteractionEvent( [ "InitConfig" ] )
                     tvals = configFunct.value.getValues()
-                    n_active_sliders = len(configFunct.sliderLabels)
-                    for slider_index in range(4):
-                        if slider_index < n_active_sliders:
-                            self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.range_bounds, tvals[slider_index]  ) # config_funct.initial_value[slider_index] )
-                        else:
-                            self.releaseSlider( slider_index )
-                    self.positionSliders( n_active_sliders )
+                    if configFunct.position <> None:
+                        n_active_sliders = configFunct.position[1]
+                        position_index = configFunct.position[0]
+                        self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.range_bounds, tvals[0]  )
+                        self.positionSlider( position_index, n_active_sliders )
+                    else:
+                        n_active_sliders = len(configFunct.sliderLabels)
+                        for slider_index in range(4):
+                            if slider_index < n_active_sliders:
+                                self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.range_bounds, tvals[slider_index]  )
+                                self.positionSlider( slider_index, n_active_sliders )
+                            else:
+                                self.releaseSlider( slider_index )
                 self.render()
 
             elif state == 'colorbar':

@@ -484,9 +484,9 @@ class ConfigurableSliderFunction( ConfigurableFunction ):
         self.StartSlidingSignal =SIGNAL('startSliding')
         self.UpdateSlidingSignal =SIGNAL('updateSliding')
         self.type = 'slider'
-        self.label = self.label
         self.initial_value = makeList( args.get( 'initValue', None ), len( self.sliderLabels ) )
         self.range_bounds = args.get( 'range_bounds', None )
+        self.position = args.get( 'position', None )
         if self.initial_value <> None:
             for index, value in enumerate( self.initial_value ):
                 self.value.setValue( index, value )

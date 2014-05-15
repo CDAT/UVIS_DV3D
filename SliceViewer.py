@@ -42,6 +42,9 @@ class SlicePlot(StructuredGridPlot):
 
         self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
         self.addConfigurableSliderFunction( 'opacityScale', 'o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+        self.addConfigurableSliderFunction( 'xSlider', 'x', sliderLabels='X Slice Position', label="Slicing", position=[0,3], interactionHandler=self.processSlicingCommand )
+        self.addConfigurableSliderFunction( 'ySlider', 'y', sliderLabels='Y Slice Position', label="Slicing", position=[1,3], interactionHandler=self.processSlicingCommand )
+        self.addConfigurableSliderFunction( 'zSlider', 'z', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
 
 #         self.addConfigurableLevelingFunction( 'colorScale', 'C', label='Colormap Scale', units='data', setLevel=self.scaleColormap, getLevel=self.getDataRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
 #         self.addConfigurableLevelingFunction( 'opacity', 'O', label='Slice Plane Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setOpacity, activeBound='min',  getLevel=self.getOpacity, isDataValue=False, layerDependent=True, bound = False, group=ConfigGroup.Rendering )
@@ -60,12 +63,33 @@ class SlicePlot(StructuredGridPlot):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         md = self.getInputSpec().getMetadata()
-        if key in 'xyz': 
-            self.modifySlicePlaneVisibility( key )                       
+        return StructuredGridPlot.onKeyEvent( self, eventArgs )
+
+    def processSlicingCommand( self, args, config_function = None ):
+        plane_widget = self.getPlaneWidget( config_function.key )
+        slicePosition = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            primaryInput = self.input()
+            bounds = list( primaryInput.GetBounds() ) 
+            bindex = 2*config_function.position[0]
+            init_range = [ bounds[bindex], bounds[bindex+1] ]
+            config_function.range_bounds = init_range  
+            config_function.initial_value = init_range[0] 
+            slicePosition.setValues( init_range ) 
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+            self.modifySlicePlaneVisibility( config_function.key )                       
             self.render() 
-        else:
-            return StructuredGridPlot.onKeyEvent( self, eventArgs )
-        return 1
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            plane_widget.SetSlicePosition( args[2] )
 
     def processOpacityScalingCommand( self, args, config_function = None ):
         opacityRange = config_function.value
@@ -332,9 +356,7 @@ class SlicePlot(StructuredGridPlot):
             self.setBasemapCoastlineLineSpecs( [ 1, 1 ] )
             self.setBasemapCountriesLineSpecs( [ 0, 1 ] )
             
-        self.modifySlicePlaneVisibility( 'y', False )
-        self.modifySlicePlaneVisibility( 'z', False )
-        self.modifySlicePlaneVisibility( 'x', True )
+        self.onKeyEvent( [ 'x', 'x' ] )
 
 #        self.set3DOutput() 
 
