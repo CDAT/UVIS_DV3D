@@ -78,6 +78,7 @@ class SlicePlot(StructuredGridPlot):
             config_function.range_bounds = init_range  
             config_function.initial_value = init_range[0] 
             slicePosition.setValues( init_range ) 
+            plane_widget.SetSlicePosition( config_function.initial_value )
         elif args and args[0] == "EndConfig":
             pass
         elif args and args[0] == "InitConfig":
@@ -89,6 +90,7 @@ class SlicePlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
+            print "Process Slicing Command: ", str( args )
             plane_widget.SetSlicePosition( args[2] )
 
     def processOpacityScalingCommand( self, args, config_function = None ):
@@ -306,7 +308,7 @@ class SlicePlot(StructuredGridPlot):
         self.planeWidgetZ.SetInput( primaryInput, contourInput )
         self.planeWidgetZ.SetPlaneOrientationToZAxes()
         self.planeWidgetZ.PlaceWidget( bounds )
-        
+       
         if self.planeWidgetZ.HasThirdDimension(): 
             if (self.planeWidgetX == None): 
                 self.planeWidgetX = ImagePlaneWidget( self, picker, 0 )
@@ -319,7 +321,7 @@ class SlicePlot(StructuredGridPlot):
                 
             self.planeWidgetX.SetInput( primaryInput, contourInput )
             self.planeWidgetX.SetPlaneOrientationToXAxes()
-            self.planeWidgetX.PlaceWidget( bounds )       
+            self.planeWidgetX.PlaceWidget( bounds )     
                     
             if self.planeWidgetY == None: 
                 self.planeWidgetY = ImagePlaneWidget( self, picker, 1)
@@ -333,7 +335,7 @@ class SlicePlot(StructuredGridPlot):
             
             self.planeWidgetY.SetInput( primaryInput, contourInput )
             self.planeWidgetY.SetPlaneOrientationToYAxes()       
-            self.planeWidgetY.PlaceWidget(  bounds  ) 
+            self.planeWidgetY.PlaceWidget(  bounds  )     
 
         self.renderer.SetBackground( VTK_BACKGROUND_COLOR[0], VTK_BACKGROUND_COLOR[1], VTK_BACKGROUND_COLOR[2] )
         self.updateOpacity() 
@@ -355,8 +357,13 @@ class SlicePlot(StructuredGridPlot):
         else:
             self.setBasemapCoastlineLineSpecs( [ 1, 1 ] )
             self.setBasemapCountriesLineSpecs( [ 0, 1 ] )
-            
+         
+        self.modifySlicePlaneVisibility( 'x', False )   
+        self.modifySlicePlaneVisibility( 'y', False )   
+        self.modifySlicePlaneVisibility( 'z', False )  
+         
         self.onKeyEvent( [ 'x', 'x' ] )
+        self.render()
 
 #        self.set3DOutput() 
 
