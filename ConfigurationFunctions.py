@@ -3,7 +3,7 @@ Created on May 9, 2014
 
 @author: tpmaxwel
 '''
-import sys, vtk, cdms2, traceback, os, cdtime, cPickle 
+import sys, vtk, cdms2, traceback, os, cdtime, cPickle, copy 
 from StringIO import StringIO
 import numpy as np
 import inspect
@@ -485,12 +485,25 @@ class ConfigurableSliderFunction( ConfigurableFunction ):
         self.UpdateSlidingSignal =SIGNAL('updateSliding')
         self.type = 'slider'
         self.initial_value = makeList( args.get( 'initValue', None ), len( self.sliderLabels ) )
-        self.range_bounds = args.get( 'range_bounds', None )
+        self._range_bounds = args.get( 'range_bounds', None )
+        self._initial_range = None
         self.position = args.get( 'position', None )
         if self.initial_value <> None:
             for index, value in enumerate( self.initial_value ):
                 self.value.setValue( index, value )
+
+    def scaleRange( self, scale_factor ):
+        if self._initial_range == None: 
+            self._initial_range = self._range_bounds
+        if self._initial_range <> None:
+            self._range_bounds = [ irv * scale_factor for irv in self._initial_range ]
         
+    def getRangeBounds(self):
+        return copy.copy( self._range_bounds )
+
+    def setRangeBounds(self, value):
+        self._range_bounds = copy.copy( value )
+         
 def getTitle( dsid, name, attributes, showUnits=False ):
     long_name = attributes.get( 'long_name', attributes.get( 'standard_name', name ) )
     if not showUnits: return "%s:%s" % ( dsid, long_name )

@@ -96,6 +96,7 @@ class DV3DPlot():
         self.renderWindowInteractor = self.renderWindow.GetInteractor()
         self.navigationInteractorStyle = args.get( 'istyle', vtk.vtkInteractorStyleTrackballCamera() )  
         self.renderWindowInteractor.SetInteractorStyle( self.navigationInteractorStyle )
+        self.current_configuration_mode = None
         self.cameraOrientation = {}
         self.maxStageHeight = 100.0
         self.observerTargets = set()
@@ -139,10 +140,13 @@ class DV3DPlot():
 
     def updateSliderWidgets(self, value0, value1 ): 
         for index, value in enumerate( ( value0, value1 ) ):
-            if value <> None:
-                ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
-                srep = swidget.GetRepresentation( )   
-                srep.SetValue( value )
+            if value <> None: self.setSliderValue( index, value )
+                 
+    def setSliderValue(self, index, value ):
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
+        if swidget:
+            srep = swidget.GetRepresentation( )   
+            srep.SetValue( value )
             
     def createSliderWidget( self, index ): 
         sliderRep = vtk.vtkSliderRepresentation2D()
@@ -182,6 +186,9 @@ class DV3DPlot():
         for islider in range( nsliders ):
             self.positionSlider( islider, nsliders )
             
+    def releaseSliders( self ):
+        for index in range(4): self.releaseSlider( index )            
+            
     def positionSlider(self, position_index, n_sliders ):
         slider_pos = self.slider_postions[ n_sliders ]
         ( process_mode, interaction_state, swidget ) = self.currentSliders[position_index]
@@ -206,6 +213,11 @@ class DV3DPlot():
     def releaseSlider( self, index ):        
         ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
         if swidget: swidget.SetEnabled( 0 ) 
+
+    def getSliderEnabled( self, index ):        
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
+        if swidget: return swidget.GetEnabled() 
+        return False
         
     def clearInteractions(self):
         if self.InteractionState <> None: 
@@ -358,7 +370,10 @@ class DV3DPlot():
             self.labelBuff = "%s" % str(text) 
         label_actor = self.getLabelActor()
         if label_actor: label_actor.VisibilityOn() 
-        if render: self.render()     
+        if render: self.render() 
+        
+    def getDisplayText(self): 
+        return self.labelBuff   
 
     def getLabelActor(self):
         return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.01, .90), bold = False  ) if self.textDisplayMgr else None
@@ -409,21 +424,26 @@ class DV3DPlot():
                 self.LastInteractionState = self.InteractionState
                 self.disableVisualizationInteraction()               
                 if (configFunct.type == 'slider'):
+#                    self.slicePlanesVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
                     configFunct.processInteractionEvent( [ "InitConfig" ] )
+                    self.current_configuration_mode = configFunct.label
                     tvals = configFunct.value.getValues()
                     if configFunct.position <> None:
                         n_active_sliders = configFunct.position[1]
                         position_index = configFunct.position[0]
-                        self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.range_bounds, tvals[0]  )
-                        self.positionSlider( position_index, n_active_sliders )
+                        if self.slicePlanesVisible[ position_index ]:
+                            self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.getRangeBounds(), tvals[0]  )
+                            self.positionSlider( position_index, n_active_sliders )
+                        else: self.releaseSlider( position_index )
                     else:
-                        n_active_sliders = len(configFunct.sliderLabels)
+                        n_active_sliders = len( configFunct.sliderLabels )
                         for slider_index in range(4):
-                            if slider_index < n_active_sliders:
-                                self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.range_bounds, tvals[slider_index]  )
+                            if self.slicePlanesVisible[ slider_index ]:
+                                self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.getRangeBounds(), tvals[slider_index]  )
                                 self.positionSlider( slider_index, n_active_sliders )
                             else:
                                 self.releaseSlider( slider_index )
+                    configFunct.processInteractionEvent( [ "ProcessSliderInit" ] )
                 self.render()
 
             elif state == 'colorbar':

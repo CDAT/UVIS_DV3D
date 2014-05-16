@@ -108,6 +108,8 @@ class RectGridPlot(StructuredGridPlot):
         self.NumContours = 10.0
         self.showOutlineMap = True
         self.zincSkipIndex = 1
+        self.volume = None
+        self.slicePlanesVisible = [ True, False, False, False ]
 
         self.max_opacity = 1.0
         self.vthresh = None
@@ -161,6 +163,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
+            self.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -177,7 +180,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "Init":
             init_range = self.getDataRangeBounds()
-            config_function.range_bounds = init_range  
+            config_function.setRangeBounds( init_range )  
             config_function.initial_value = init_range  
             self.scaleColormap( init_range )
             self.generateCTF( init_range )
@@ -186,6 +189,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
+            self.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -194,7 +198,7 @@ class RectGridPlot(StructuredGridPlot):
             colorScaleRange.setValue( args[1], args[2] )
             cscale = colorScaleRange.getValues()
             self.scaleColormap( cscale )
-            self.generateCTF( init_range )
+            self.generateCTF( cscale )
 
     def processThresholdRangeCommand( self, args, config_function = None ):
         volumeThresholdRange = config_function.value
@@ -202,7 +206,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "Init":
             init_range = self.getSgnRangeBounds()
-            config_function.range_bounds = init_range  
+            config_function.setRangeBounds( init_range )   
             config_function.initial_value = init_range  
             self.generateOTF( init_range )
             volumeThresholdRange.setValues( init_range )
@@ -210,6 +214,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
+            self.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -229,7 +234,7 @@ class RectGridPlot(StructuredGridPlot):
             primaryInput = self.input()
             bounds = list( primaryInput.GetBounds() ) 
             init_range = [ bounds[2*plane_index], bounds[2*plane_index+1] ]
-            config_function.range_bounds = init_range  
+            config_function.setRangeBounds( init_range )    
             config_function.initial_value = init_range[0] 
             slicePosition.setValues( init_range ) 
             plane_widget.SetSlicePosition( config_function.initial_value )
@@ -238,8 +243,15 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "EndConfig":
             pass
         elif args and args[0] == "InitConfig":
-            self.updateTextDisplay( config_function.label )
-            self.modifySlicePlaneVisibility( config_function.key )                       
+            if ( config_function.label <> self.current_configuration_mode ):
+                self.releaseSliders()
+                self.updateTextDisplay( config_function.label )
+                self.slicePlanesVisible = [ ( iSlice == plane_index ) for iSlice in range(4)  ] 
+            else:
+                self.slicePlanesVisible[ plane_index ] = not self.slicePlanesVisible[ plane_index ]   
+            slider_value = slicePosition.getValue() 
+            self.setSliderValue( plane_index, slider_value )  
+            self.modifySlicePlaneVisibility( plane_index, config_function.key )
             self.render() 
         elif args and args[0] == "Open":
             pass
@@ -247,6 +259,7 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "UpdateConfig":
             plane_widget.SetSlicePosition( args[2] )
+            slicePosition.setValues( args[2:] )
             if config_function.key == 'z':
                 self.ProcessIPWAction( plane_widget, ImagePlaneWidget.InteractionUpdateEvent, action = ImagePlaneWidget.Pushing )
 
@@ -434,7 +447,7 @@ class RectGridPlot(StructuredGridPlot):
 #        print "Volume Render Event: scale = %s, bounds = %s, origin = %s, dims = %s " % ( str2f( scale ), str2f( bounds ), str2f( origin ), str( dims )  )
 
                               
-    def buildPipeline(self):
+    def buildVolumePipeline(self):
         """ execute() -> None
         Dispatch the vtkRenderer to the actual rendering widget
         """  
@@ -447,7 +460,6 @@ class RectGridPlot(StructuredGridPlot):
         ox, oy, oz = origin
         self._range = [ rangeBounds[0], rangeBounds[1], rangeBounds[0], 0 ]
         dataType = self.input().GetScalarTypeAsString()
-        self.setMaxScalarValue( self.input().GetScalarType() )
         self.pos = [ spacing[i]*extent[2*i] for i in range(3) ]
 #        if ( (origin[0] + self.pos[0]) < 0.0): self.pos[0] = self.pos[0] + 360.0
         bounds = [0]*6
@@ -466,13 +478,7 @@ class RectGridPlot(StructuredGridPlot):
         
 #        self.inputInfo = self.inputPort.GetInformation() 
 #        translation = inputInfo.Get( ResampleTranslationKey  )                                     
-        
-        # Create transfer mapping scalar value to color
-        self.colorTransferFunction = vtk.vtkColorTransferFunction()
-                
-        # Create transfer mapping scalar value to opacity
-        self.opacityTransferFunction = vtk.vtkPiecewiseFunction()        
-                
+                        
         # The property describes how the data will look
         self.volumeProperty = vtk.vtkVolumeProperty()
         self.volumeProperty.SetInterpolationType( vtk.VTK_LINEAR_INTERPOLATION )
@@ -520,12 +526,20 @@ class RectGridPlot(StructuredGridPlot):
         self.renderer.SetBackground( VTK_BACKGROUND_COLOR[0], VTK_BACKGROUND_COLOR[1], VTK_BACKGROUND_COLOR[2] )
         self.setColormap( [ 'jet', 1, 0, 0 ] )
 
+    def buildPipeline(self):
+
         contour_ispec = None # self.getInputSpec(  1 )       
 
         contourInput = contour_ispec.input() if contour_ispec <> None else None
         primaryInput = self.input()
         md = self.getInputSpec().getMetadata()
         self.latLonGrid = md.get( 'latLonGrid', True )
+
+        # Create transfer mapping scalar value to color
+        self.colorTransferFunction = vtk.vtkColorTransferFunction()                
+        # Create transfer mapping scalar value to opacity
+        self.opacityTransferFunction = vtk.vtkPiecewiseFunction()        
+        self.setMaxScalarValue( self.input().GetScalarType() )
 
 #        self.contourInput = None if contourModule == None else contourModule.getOutput() 
         # The 3 image plane widgets are used to probe the dataset.    
@@ -543,9 +557,6 @@ class RectGridPlot(StructuredGridPlot):
         # The shared picker enables us to use 3 planes at one time
         # and gets the picking order right
         lut = self.getLut()
-        picker = None
-        useVtkImagePlaneWidget = False
-        textureColormapManager = self.getColormapManager( index=0 )
         picker = vtk.vtkCellPicker()
         picker.SetTolerance(0.005) 
                 
@@ -611,9 +622,9 @@ class RectGridPlot(StructuredGridPlot):
             self.setBasemapCoastlineLineSpecs( [ 1, 1 ] )
             self.setBasemapCountriesLineSpecs( [ 0, 1 ] )
          
-        self.modifySlicePlaneVisibility( 'x', False )   
-        self.modifySlicePlaneVisibility( 'y', False )   
-        self.modifySlicePlaneVisibility( 'z', False )  
+        self.modifySlicePlaneVisibility( 0, 'x', False )   
+        self.modifySlicePlaneVisibility( 1, 'y', False )   
+        self.modifySlicePlaneVisibility( 2, 'z', False )  
 
       
     def clipObserver( self, caller=None, event=None ):
@@ -663,13 +674,14 @@ class RectGridPlot(StructuredGridPlot):
 #        self.volume.UseBoundsOff()     
 #        print " *** volume visible: %s " % ( self.volume.GetVisibility() )
         aCamera = self.renderer.GetActiveCamera()
-        bounds = self.volume.GetBounds()
         p = aCamera.GetPosition()
         f = aCamera.GetFocalPoint()
 #        printArgs( "ResetCameraClippingRange", focal_point=f, cam_pos=p, vol_bounds=bounds )
         self.renderer.ResetCameraClippingRange() 
         
     def toggleVolumeVisibility(self):
+        if self.volume == None:
+            self.buildVolumePipeline()
         isVisible = self.volume.GetVisibility()
         if isVisible: self.volume.VisibilityOff()
         else: self.volume.VisibilityOn()
@@ -685,7 +697,7 @@ class RectGridPlot(StructuredGridPlot):
                     self.processKeyEvent( slice  )
             else: 
                 self.releaseSlider( iSlice )
-                self.modifySlicePlaneVisibility( slice, False )  
+                self.modifySlicePlaneVisibility( iSlice, slice, False )  
         self.render() 
                     
     def EventWatcher( self, caller, event ): 
@@ -929,7 +941,10 @@ class RectGridPlot(StructuredGridPlot):
             if not self.planeWidgetX.MatchesBounds( bounds ):
                 self.planeWidgetX.PlaceWidget( bounds )        
                 self.planeWidgetY.PlaceWidget( bounds ) 
-                self.render()               
+        cf = self.getConfigFunction( 'zSlider' )
+        if cf: 
+            cf.scaleRange( zscale_data[0] )
+        self.render()               
 
     def setInputZScale( self, zscale_data, **args  ):
         StructuredGridPlot.setInputZScale( self, zscale_data, **args  )
@@ -996,9 +1011,12 @@ class RectGridPlot(StructuredGridPlot):
         return None 
 
 #TODO:    
-    def modifySlicePlaneVisibility( self, plane, make_visible=None ):
+    def modifySlicePlaneVisibility( self, slider_index, plane, make_visible=None ):
         plane_index, plane_widget = self.getPlaneWidget( plane )
-        if make_visible == None:  make_visible = not plane_widget.IsVisible()
+        if make_visible == None:  
+            make_visible = self.slicePlanesVisible[ slider_index ] 
+        else:
+            self.slicePlanesVisible[ slider_index ] = make_visible
         if make_visible:   
             plane_widget.VisibilityOn()
         else:               

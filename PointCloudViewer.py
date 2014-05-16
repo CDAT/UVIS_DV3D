@@ -436,7 +436,7 @@ class CPCPlot( DV3DPlot ):
         elif args and args[0] == "Init":
             axis_bounds = self.point_cloud_overview.getBounds()
             config_function.initial_value = axis_bounds
-            config_function.range_bounds = axis_bounds
+            config_function.setRangeBounds( axis_bounds )
             sliceParam.setValue( 'bounds', [ [ axis_bounds[0], axis_bounds[1] ], [ axis_bounds[2], axis_bounds[3] ], [ axis_bounds[4], axis_bounds[5] ] ] )
             sliceParam.setValue( 'spos', [ axis_bounds[0], axis_bounds[2], axis_bounds[4] ] )
             sliceParam.setValue( 0, axis_bounds[0] )
@@ -455,7 +455,7 @@ class CPCPlot( DV3DPlot ):
             positions = sliceParam.getValue( 'spos' )
             spos = positions[ self.sliceAxisIndex ]
             axis_bounds = sliceParam.getValue( 'bounds' )
-            config_function.range_bounds = axis_bounds[ self.sliceAxisIndex ]
+            config_function.setRangeBounds( axis_bounds[ self.sliceAxisIndex ] )
             sliceParam.setValue( 0, spos )
             self.execCurrentSlice( spos=spos )
         elif args and args[0] == "UpdateConfig":
@@ -474,7 +474,7 @@ class CPCPlot( DV3DPlot ):
                 self.enableThresholding()        
         elif args and args[0] == "Init":
             init_range = self.point_cloud_overview.getValueRange()
-            config_function.range_bounds = init_range  
+            config_function.setRangeBounds(  init_range   )
             config_function.initial_value = init_range  
             volumeThresholdRange.setValues( init_range )
             volumeThresholdRange.setValue( self.defvar, init_range )
@@ -518,7 +518,7 @@ class CPCPlot( DV3DPlot ):
         if args and args[0] == "Init":
             init_range = self.point_cloud_overview.getValueRange()
             config_function.initial_value = init_range
-            config_function.range_bounds = init_range
+            config_function.setRangeBounds(  init_range )
             self.point_cloud_overview.setScalarRange( init_range ) 
             self.setColorbarRange( init_range ) 
             scalarRange.setValues( init_range )            
