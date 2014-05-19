@@ -108,6 +108,7 @@ class DV3DPlot():
         self.widget = None
         self.process_mode = ProcessMode.Default
         self.slider_postions = [ [ [ 0.25, 0.75 ] ], [ [0.01,0.48], [0.52, 0.99 ] ], [ [0.01,0.3], [0.35,0.7], [0.75, 0.99 ] ], [ [0.01,0.24], [0.26,0.49], [0.51,0.74], [0.76, 0.99 ] ]    ]
+        self.slicePlanesVisible = [ True, False, False, False ]
         
         self.configuring = False
         self.configurableFunctions = {}
@@ -195,6 +196,9 @@ class DV3DPlot():
         sliderRep = swidget.GetRepresentation( ) 
         sliderRep.GetPoint1Coordinate().SetValue( slider_pos[position_index][0], 0.06, 0 )  
         sliderRep.GetPoint2Coordinate().SetValue( slider_pos[position_index][1], 0.06, 0 )
+        sliderRep.Modified()
+        swidget.Modified()
+        swidget.Render()     
                         
     def commandeerSlider(self, index, label, bounds, value ): 
         widget_item = self.currentSliders.get( index, None )
@@ -299,7 +303,7 @@ class DV3DPlot():
             self.processKeyEvent( key, caller, event )
         return 0
 
-    def processKeyEvent( self, key, caller=None, event=None ):
+    def processKeyEvent( self, key, caller=None, event=None, **args ):
         keysym = caller.GetKeySym() if caller else key
         if self.onKeyEvent( [ key, keysym ] ):
             pass
@@ -308,7 +312,7 @@ class DV3DPlot():
     #            print " %s Set Interaction State: %s ( currently %s) " % ( str(self.__class__), state, self.InteractionState )
             if state <> None: 
                 print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
-                self.updateInteractionState( state  )                 
+                self.updateInteractionState( state, **args  )                 
                 self.isAltMode = False 
         return 0
 
@@ -402,7 +406,7 @@ class DV3DPlot():
             if configFunct.matches( key ): return ( configFunct.name, configFunct.persisted )
         return ( None, None )    
 
-    def updateInteractionState( self, state ):    
+    def updateInteractionState( self, state, **args ):    
         rcf = None
         if state == None: 
             self.finalizeLeveling()
@@ -424,6 +428,7 @@ class DV3DPlot():
                 self.LastInteractionState = self.InteractionState
                 self.disableVisualizationInteraction()               
                 if (configFunct.type == 'slider'):
+                    force_enable = args.get( 'enable', False )
 #                    self.slicePlanesVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
                     configFunct.processInteractionEvent( [ "InitConfig" ] )
                     self.current_configuration_mode = configFunct.label
@@ -431,9 +436,10 @@ class DV3DPlot():
                     if configFunct.position <> None:
                         n_active_sliders = configFunct.position[1]
                         position_index = configFunct.position[0]
-                        if self.slicePlanesVisible[ position_index ]:
+                        if self.slicePlanesVisible[ position_index ] or force_enable:
                             self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.getRangeBounds(), tvals[0]  )
                             self.positionSlider( position_index, n_active_sliders )
+                            self.slicePlanesVisible[ position_index ] = True
                         else: self.releaseSlider( position_index )
                     else:
                         n_active_sliders = len( configFunct.sliderLabels )
@@ -447,7 +453,7 @@ class DV3DPlot():
                 self.render()
 
             elif state == 'colorbar':
-                self.toggleColormapVisibility()                        
+                self.toggleColorbarVisibility()                        
             elif state == 'reset':
                 self.resetCamera()              
                 if  len(self.persistedParameters):
@@ -575,6 +581,7 @@ class DV3DPlot():
         key = eventArgs[0]
         keysym =  eventArgs[1]            
         if keysym == "i":  self.clearInteractions()
+        if keysym == "b":  self.toggleColorbarVisibility()
         else: return False
         return True
 
@@ -582,9 +589,9 @@ class DV3DPlot():
         colormapManager = self.getColormapManager( index=cmap_index )
         return colormapManager.lut
 
-    def toggleColormapVisibility(self):
+    def toggleColorbarVisibility(self):
         for colormapManager in self.colormapManagers.values():
-            colormapManager.toggleColormapVisibility()
+            colormapManager.toggleColorbarVisibility()
         self.render()
     
     def getColormapManager( self, **args ):

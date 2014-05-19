@@ -309,7 +309,7 @@ class CPCPlot( DV3DPlot ):
         if   keysym == "s":  self.toggleTopo()
         elif keysym == "t":  self.stepTime()
         elif keysym == "A":  self.stepTime( False )
-        elif keysym == "c":  self.toggleClipping()
+        elif keysym == "k":  self.toggleClipping()
         elif keysym == "m":  self.toggleRenderMode()
         elif keysym == "v":  self.enableThresholding()
 #        elif keysym == "i":  self.setPointIndexBounds( 5000, 7000 )

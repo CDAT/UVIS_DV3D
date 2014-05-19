@@ -88,6 +88,14 @@ class RectGridPlot(StructuredGridPlot):
     NI_SHAPE_ADJ_1 = 10004
 
     global_coords = [-1, -1, -1]
+
+    NoButtonDown = 0
+    RightButtonDown = 1
+    LeftButtonDown = 2
+
+    Start = 0
+    Cursoring = 1
+    Outside  = 2
     
     def __init__( self, **args ):
         StructuredGridPlot.__init__( self, **args  )
@@ -108,8 +116,11 @@ class RectGridPlot(StructuredGridPlot):
         self.NumContours = 10.0
         self.showOutlineMap = True
         self.zincSkipIndex = 1
+        self.state = self.Start
         self.volume = None
-        self.slicePlanesVisible = [ True, False, False, False ]
+        
+        self.levelSetActor = None
+        self.surfacePicker = None
 
         self.max_opacity = 1.0
         self.vthresh = None
@@ -134,7 +145,7 @@ class RectGridPlot(StructuredGridPlot):
         self.addConfigurableSliderFunction( 'ySlider', 'y', sliderLabels='Y Slice Position', label="Slicing", position=[1,3], interactionHandler=self.processSlicingCommand )
         self.addConfigurableSliderFunction( 'zSlider', 'z', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
         self.addConfigurableSliderFunction( 'functionScale', 'T', label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
-
+        self.addConfigurableSliderFunction( 'isosurfaceValue', 'L', sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
 #         self.addConfigurableLevelingFunction( 'colorScale', 'C', label='Colormap Scale', units='data', setLevel=self.scaleColormap, getLevel=self.getDataRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
 #         self.addConfigurableLevelingFunction( 'opacity', 'O', label='Slice Plane Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setOpacity, activeBound='min',  getLevel=self.getOpacity, isDataValue=False, layerDependent=True, bound = False, group=ConfigGroup.Rendering )
 #         self.addConfigurableLevelingFunction( 'contourDensity', 'g', label='Contour Density', activeBound='max', setLevel=self.setContourDensity, getLevel=self.getContourDensity, layerDependent=True, windowing=False, rangeBounds=[ 3.0, 30.0, 1 ], bound=False, isValid=self.hasContours, group=ConfigGroup.Rendering )
@@ -199,7 +210,36 @@ class RectGridPlot(StructuredGridPlot):
             cscale = colorScaleRange.getValues()
             self.scaleColormap( cscale )
             self.generateCTF( cscale )
-
+            
+    def setIsosurfaceLevel( self, value ):
+        if self.levelSetActor <> None:
+            self.levelSetFilter.SetValue ( 0, value ) 
+            self.levelSetFilter.Modified()
+                 
+    def processIsosurfaceValueCommand( self, args, config_function = None ):
+        isosurfaceValue = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            init_range = self.getSgnRangeBounds()
+            config_function.setRangeBounds( init_range )   
+            config_function.initial_value = init_range 
+            init_value = (init_range[0]+init_range[1])/2.0 
+            self.setIsosurfaceLevel( init_value ) 
+            isosurfaceValue.setValues( [ init_value ] )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            self.updateTextDisplay( config_function.label )
+            self.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            pass
+        elif args and args[0] == "UpdateConfig":
+            isosurfaceValue.setValues( args[2:] )
+            self.setIsosurfaceLevel( args[2] ) 
+ 
     def processThresholdRangeCommand( self, args, config_function = None ):
         volumeThresholdRange = config_function.value
         if args and args[0] == "StartConfig":
@@ -253,6 +293,9 @@ class RectGridPlot(StructuredGridPlot):
             self.setSliderValue( plane_index, slider_value )  
             self.modifySlicePlaneVisibility( plane_index, config_function.key )
             self.render() 
+        elif args and args[0] == "ProcessSliderInit":
+            for plane_index in range(3):
+                self.modifySlicePlaneVisibility( plane_index, 'xyz'[plane_index]  )              
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -287,9 +330,9 @@ class RectGridPlot(StructuredGridPlot):
         if self.clipper and ( self.cropRegion == None ):
             self.renwin = self.renderer.GetRenderWindow( )
             if self.renwin <> None:
-                iren = self.renwin.GetInteractor() 
-                if ( iren <> None ): 
-                    self.clipper.SetInteractor( iren )
+                
+                if ( self.renderWindowInteractor <> None ): 
+                    self.clipper.SetInteractor( self.renderWindowInteractor )
                     self.cropRegion = self.getVolumeBounds()
                     self.clipper.PlaceWidget( self.cropRegion )
         self.render() 
@@ -446,6 +489,218 @@ class RectGridPlot(StructuredGridPlot):
 #        print " Volume position: %s " % str( self.volume.GetPosition() )
 #        print "Volume Render Event: scale = %s, bounds = %s, origin = %s, dims = %s " % ( str2f( scale ), str2f( bounds ), str2f( origin ), str( dims )  )
 
+    def doPick( self, X, Y ):  
+        found = 0
+        if self.surfacePicker:
+            self.surfacePicker.Pick( X, Y, 0.0, self.renderer )
+            path = self.surfacePicker.GetPath()        
+            if path:
+                path.InitTraversal()
+                for _ in range( path.GetNumberOfItems() ):
+                    node = path.GetNextNode()
+                    if node and ( node.GetViewProp() == self.levelSetActor ):
+                        found = 1
+                        break
+        return found
+
+    def onLeftButtonPress( self, caller, event ):
+        shift = caller.GetShiftKey()
+        
+        if False: # self.surfacePicker and not shift: 
+            if self.state == self.Outside:
+                self.stopCursor()
+            elif self.state == self.Start:
+                X = self.renderWindowInteractor.GetEventPosition()[0]
+                Y = self.renderWindowInteractor.GetEventPosition()[1]       
+                if self.doPick( X, Y ): 
+                    self.startCursor() 
+        else:           
+            StructuredGridPlot.onLeftButtonPress( self, caller, event )
+
+#    def onLeftButtonRelease( self, caller, event ):
+#        if self.state == self.Cursoring:
+#            self.stopCursor()
+#        else:
+#            StructuredGridPlot.onLeftButtonRelease( self, caller, event )
+
+    def onModified(self, caller, event ):
+        
+        if self.state == self.Cursoring:
+            X = self.renderWindowInteractor.GetEventPosition()[0]
+            Y = self.renderWindowInteractor.GetEventPosition()[1]
+                    
+            camera = self.renderer.GetActiveCamera()
+            if (  not camera ): return
+                                        
+            self.updateCursor(X,Y)         
+            self.renderWindowInteractor.Render()
+        else:
+            StructuredGridPlot.onModified( self, caller, event ) 
+        
+    def startCursor(self):
+        if self.state == self.Cursoring: return
+         
+    
+        X = self.renderWindowInteractor.GetEventPosition()[0]
+        Y = self.renderWindowInteractor.GetEventPosition()[1]
+        
+        # Okay, make sure that the pick is in the current renderer
+        if ( not self.renderer or  not self.renderer.IsInViewport(X, Y)):        
+            self.state  = self.Outside
+            return
+        
+        if self.doPick( X, Y ):      
+            self.state  = self.Cursoring
+            self.haltNavigationInteraction()
+            self.cursorActor.VisibilityOn()
+            self.updateCursor(X,Y)
+#            self.startInteraction()
+#            self.processEvent( self.InteractionStartEvent )
+            self.renderWindowInteractor.Render()  
+            return 1     
+        else:
+            self.state  = self.Outside
+            self.cursorActor.VisibilityOff()
+            return 0            
+
+    def stopCursor(self):                            
+#        self.ProcessEvent( self.InteractionEndEvent )
+        self.state  = self.Start
+        self.cursorActor.VisibilityOff() 
+        self.resetNavigationInteraction()     
+#        self.endInteraction()
+        self.renderWindowInteractor.Render()
+        
+    def updateCursor( self, X, Y ):
+        if self.surfacePicker:        
+            self.surfacePicker.Pick( X, Y, 0.0, self.renderer )            
+            if self.doPick( X, Y ):    
+                self.cursorActor.VisibilityOn()
+            else:
+                self.cursorActor.VisibilityOff()
+                return 
+                                         
+#            pos = self.surfacePicker.GetPickPosition()    
+#            if( pos == None ):        
+#                self.cursorActor.VisibilityOff()
+#                return
+#            self.cursor.SetCenter ( pos[0], pos[1], pos[2] )
+            self.displayPickData()
+            
+    def displayPickData( self ):
+        pointId =  self.surfacePicker.GetPointId() 
+        if pointId < 0:
+            self.cursorActor.VisibilityOff()
+        else:
+            level_ispec = self.getInputSpec() 
+            if level_ispec and level_ispec.input(): 
+                pdata = self.levelSetFilter.GetOutput()
+                point_data = pdata.GetPointData()
+                pos = pdata.GetPoint( pointId )
+                self.cursor.SetCenter ( pos[0], pos[1], pos[2] )
+                scalarsArray = point_data.GetScalars()
+                image_data_value = scalarsArray.GetTuple1( pointId )
+                data_value = level_ispec.getDataValue( image_data_value )
+                textDisplay = " Position: (%.2f, %.2f, %.2f), Level Value: %.3G %s" % ( pos[0], pos[1], pos[2], data_value, level_ispec.units )  
+                texture_ispec = self.getInputSpec(  1 )                
+                if texture_ispec and texture_ispec.input():
+                    tex_pdata = self.probeFilter.GetOutput()
+                    tex_point_data = tex_pdata.GetPointData()
+                    tex_scalarsArray = tex_point_data.GetScalars()
+                    tex_image_data_value = tex_scalarsArray.GetTuple1( pointId )
+                    tex_data_value = texture_ispec.getDataValue( tex_image_data_value )
+                    textDisplay += ", Texture value: %.3G %s" % ( tex_data_value, texture_ispec.units )
+                self.updateTextDisplay( textDisplay )                        
+
+    def buildIsosurfacePipeline(self):
+        """ execute() -> None
+        Dispatch the vtkRenderer to the actual rendering widget
+        """ 
+        
+        useClipper = False
+        texture_ispec = self.getInputSpec(  1 )                
+        xMin, xMax, yMin, yMax, zMin, zMax = self.input().GetWholeExtent()       
+        self.sliceCenter = [ (xMax-xMin)/2, (yMax-yMin)/2, (zMax-zMin)/2  ]       
+        spacing = self.input().GetSpacing()
+        sx, sy, sz = spacing 
+#        self.input().SetSpacing( sx, sy, 5*sz )      
+        origin = self.input().GetOrigin()
+        ox, oy, oz = origin
+        dataType = self.input().GetScalarTypeAsString()
+        self.setMaxScalarValue( self.input().GetScalarType() )
+        self.colorByMappedScalars = False
+        rangeBounds = self.getRangeBounds()
+
+        dr = rangeBounds[1] - rangeBounds[0]
+        range_offset = .2*dr
+        self.range = [ rangeBounds[0] + range_offset, rangeBounds[1] - range_offset ]
+        print "Data Type = %s, range = (%f,%f), range bounds = (%f,%f), max_scalar = %s" % ( dataType, self.range[0], self.range[1], rangeBounds[0], rangeBounds[1], self._max_scalar_value )
+        self.probeFilter = None
+        textureRange = self.range
+        if texture_ispec and texture_ispec.input():
+            self.probeFilter = vtk.vtkProbeFilter()
+            textureRange = texture_ispec.input().GetScalarRange()
+            self.probeFilter.SetSource( texture_ispec.input() )
+            self.generateTexture = True
+
+        if (self.surfacePicker == None):           
+            self.surfacePicker  = vtk.vtkPointPicker()
+                    
+        self.levelSetFilter = vtk.vtkContourFilter()
+        
+        if vtk.VTK_MAJOR_VERSION <= 5:  self.levelSetFilter.SetInput(self.input())
+        else:                           self.levelSetFilter.SetInputData(self.input())        
+
+        if useClipper:
+            self.clipPlanes = vtk.vtkPlanes() 
+            self.polyClipper = vtk.vtkClipPolyData()
+            self.polyClipper.SetInputConnection( self.levelSetFilter.GetOutputPort() )
+            self.polyClipper.SetClipFunction( self.clipPlanes )
+            self.polyClipper.InsideOutOn()
+                
+        self.levelSetMapper = vtk.vtkPolyDataMapper()
+        self.levelSetMapper.SetColorModeToMapScalars()
+        mapperInputPort = self.polyClipper.GetOutputPort() if useClipper else self.levelSetFilter.GetOutputPort()
+        if ( self.probeFilter == None ):
+            imageRange = self.getImageValues( self.range ) 
+            self.levelSetMapper.SetInputConnection( mapperInputPort ) 
+            self.levelSetMapper.SetScalarRange( imageRange[0], imageRange[1] )
+        else: 
+            self.probeFilter.SetInputConnection( mapperInputPort )
+            self.levelSetMapper.SetInputConnection( self.probeFilter.GetOutputPort() ) 
+            self.levelSetMapper.SetScalarRange( textureRange )
+            
+        colormapManager = self.getColormapManager( index=1 ) if texture_ispec and texture_ispec.input() else self.getColormapManager()                  
+        colormapManager.setAlphaRange ( [ 1, 1 ] ) 
+        self.levelSetMapper.SetLookupTable( colormapManager.lut ) 
+        self.levelSetMapper.UseLookupTableScalarRangeOn()
+       
+        self.levelSetFilter.SetNumberOfContours( 1 ) 
+          
+#        levelSetMapper.SetColorModeToMapScalars()  
+        self.levelSetActor = vtk.vtkLODActor() 
+#            levelSetMapper.ScalarVisibilityOff() 
+#            levelSetActor.SetProperty( self.levelSetProperty )              
+        self.levelSetActor.SetMapper( self.levelSetMapper )
+
+        self.cursorActor     = vtk.vtkActor()
+        self.cursorProperty  = None 
+        self.cursor = vtk.vtkSphereSource()
+        self.cursor.SetRadius(2.0)
+        self.cursor.SetThetaResolution(8)
+        self.cursor.SetPhiResolution(8)
+        
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInput(self.cursor.GetOutput())
+        self.cursorActor.SetMapper(mapper)        
+#        self.createDefaultProperties() 
+                                                                       
+        self.renderer.AddActor( self.levelSetActor )
+        self.surfacePicker.AddPickList( self.levelSetActor )
+        self.surfacePicker.PickFromListOn()
+        self.renderer.AddViewProp(self.cursorActor)
+        self.cursorActor.SetProperty(self.cursorProperty)
+        self.levelSetActor.VisibilityOff()
                               
     def buildVolumePipeline(self):
         """ execute() -> None
@@ -687,14 +942,23 @@ class RectGridPlot(StructuredGridPlot):
         else: self.volume.VisibilityOn()
         self.render()
 
+    def toggleIsosurfaceVisibility(self):
+        if self.levelSetActor == None:
+            self.buildIsosurfacePipeline()
+        isVisible = self.levelSetActor.GetVisibility()
+        if isVisible: 
+            self.levelSetActor.VisibilityOff()
+        else: 
+            self.levelSetActor.VisibilityOn()
+        self.render()
+
     def toggleSliceVisibility( self ):
         self.activeSliceIndex =  ( self.activeSliceIndex + 1 ) % 3
         for iSlice in range( 3 ):
             slice = "xyz"[iSlice]
             if iSlice ==  self.activeSliceIndex: 
                 plane_index, plane_widget = self.getPlaneWidget( slice )
-                if not plane_widget.IsVisible():
-                    self.processKeyEvent( slice  )
+                self.processKeyEvent( slice, None, None, enable=True  )
             else: 
                 self.releaseSlider( iSlice )
                 self.modifySlicePlaneVisibility( iSlice, slice, False )  
@@ -708,7 +972,8 @@ class RectGridPlot(StructuredGridPlot):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         if (  key == 'v'  ):      self.toggleVolumeVisibility()              
-        elif (  key == 'p'  ):    self.toggleSliceVisibility()              
+        elif (  key == 'p'  ):    self.toggleSliceVisibility() 
+        elif (  key == 's'  ):    self.toggleIsosurfaceVisibility()             
         else:                   return StructuredGridPlot.onKeyEvent( self, eventArgs )
         return 1                                                                                       
                
@@ -1019,14 +1284,11 @@ class RectGridPlot(StructuredGridPlot):
             self.slicePlanesVisible[ slider_index ] = make_visible
         if make_visible:   
             plane_widget.VisibilityOn()
+            if plane == 'z': self.basemapLinesVisibilityOn()
         else:               
             plane_widget.VisibilityOff()
-        if plane == 'z':
-            if make_visible:    
-                self.basemapLinesVisibilityOn()
-                self.releaseSlider( plane_index )
-            else:               
-                self.basemapLinesVisibilityOff()
+            if plane == 'z': self.basemapLinesVisibilityOff()
+                
                                                                         
 
 #        self.set3DOutput() 

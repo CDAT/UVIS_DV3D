@@ -61,8 +61,8 @@ class StructuredGridPlot(DV3DPlot):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         md = self.getInputSpec().getMetadata()
-        if ( self.createColormap and ( key == 'l' ) ): 
-            self.toggleColormapVisibility()                       
+        if ( self.createColormap and ( key == 'b' ) ): 
+            self.toggleColorbarVisibility()                       
             self.render() 
         elif (  key == 'r'  ):
             self.resetCamera()              
