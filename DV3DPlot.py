@@ -197,8 +197,8 @@ class DV3DPlot():
         sliderRep.GetPoint1Coordinate().SetValue( slider_pos[position_index][0], 0.06, 0 )  
         sliderRep.GetPoint2Coordinate().SetValue( slider_pos[position_index][1], 0.06, 0 )
         sliderRep.Modified()
-        swidget.Modified()
-        swidget.Render()     
+        swidget.Modified()    
+        sliderRep.NeedToRenderOn()
                         
     def commandeerSlider(self, index, label, bounds, value ): 
         widget_item = self.currentSliders.get( index, None )
