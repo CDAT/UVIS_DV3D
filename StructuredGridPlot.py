@@ -150,6 +150,9 @@ class StructuredGridPlot(DV3DPlot):
         nOutputs = self.variable_reader.nOutputs()
         for inputIndex in range( nOutputs ):
             ispec = self.variable_reader.outputSpec( inputIndex )
+#             fd = ispec.input().GetPointData()
+#             nc = fd.GetNumberOfComponents ()
+#             nt = fd.GetNumberOfTuples ()
             self.inputSpecs[inputIndex] = ispec 
             if self.roi == None:  
                 self.roi = ispec.metadata.get( 'bounds', None )  

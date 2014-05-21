@@ -19,13 +19,13 @@ class OutputRecManager:
         if serializedData <> None:
             self.deserialize( serializedData )
             
-    def deleteOutput( self, dsid, outputName ):
-        orecMap =  self.outputRecs.get( dsid, None )
-        if orecMap: del orecMap[outputName] 
+#     def deleteOutput( self, dsid, outputName ):
+#         orecMap =  self.outputRecs.get( dsid, None )
+#         if orecMap: del orecMap[outputName] 
 
     def addOutputRec( self, dsid, orec ): 
         orecMap =  self.outputRecs.setdefault( dsid, {} )
-        orecMap[ orec.name ] = orec
+        orecMap[ orec.getKey() ] = orec
 
     def getOutputRec( self, dsid, outputName ):
         orecMap =  self.outputRecs.get( dsid, None )
@@ -52,6 +52,9 @@ class OutputRec:
         self.type = args.get( "type", None )
         self.ndim = args.get( "ndim", 3 )
         self.updateSelections() 
+        
+    def getKey(self):
+        return '-'.join( [self.name] + self.varList )
 
     def getVarList(self):
         vlist = []
@@ -92,7 +95,7 @@ class StructuredDataReader:
         self.timeAxis = None
         self.fieldData = None
         self.df = cdms2.open( self.fileSpecs ) 
-        self.var =  self.df( self.varSpecs )
+        self.vars =  [ self.df( varSpec ) for varSpec in self.varSpecs ]
         self.outputType = CDMSDataType.Hoffmuller if ( self.subSpace == 'xyt' ) else CDMSDataType.Volume 
 # #        memoryLogger.log("Init CDMSDataReader")
 #         if self.outputType == CDMSDataType.Hoffmuller:
@@ -231,9 +234,8 @@ class StructuredDataReader:
 #            print "Time Step Labels: %s" % str( self.timeLabels )
            
     def execute(self, **args ):
-        cdms_vars = [ self.var ]
         iVar = 1
-        cdms_var = cdms_vars.pop(0)
+        cdms_var = self.vars[0]
         self.cdmsDataset = CDMSDataset()
         var = self.addCDMSVariable( cdms_var, iVar )
         self.newDataset = False
@@ -243,20 +245,12 @@ class StructuredDataReader:
         self.setupTimeAxis( var, **args )
         intersectedRoi = self.cdmsDataset.gridBounds
         intersectedRoi = self.getIntersectedRoi( cdms_var, intersectedRoi )
-        while( len(cdms_vars) ):
-            cdms_var2 = cdms_vars.pop(0)
-            if cdms_var2: 
+        for cdms_var in self.vars[1:]:
+            if id(cdms_var) <> id(None): 
                 iVar = iVar+1
-                self.addCDMSVariable( cdms_var2, iVar )
-                intersectedRoi = self.getIntersectedRoi( cdms_var2, intersectedRoi )
-              
-#         for iVarInputIndex in range( 2,5 ):
-#             cdms_var2 = self.getInputValue( "variable%d" % iVarInputIndex  ) 
-#             if cdms_var2: 
-#                 iVar = iVar+1
-#                 self.addCDMSVariable( cdms_var2, iVar )
-#                 intersectedRoi = self.getIntersectedRoi( cdms_var2, intersectedRoi )
-                
+                self.addCDMSVariable( cdms_var, iVar )
+                intersectedRoi = self.getIntersectedRoi( cdms_var, intersectedRoi )
+                              
         if hasattr(cdms_var,'url'): self.generateOutput( roi=intersectedRoi, url=cdms_var.url )
         else:                       self.generateOutput( roi=intersectedRoi )
  
@@ -296,10 +290,10 @@ class StructuredDataReader:
 #            print " VolumeReader->generateOutput, varSpecs: ", str(varRecs)
             oRecMgr = OutputRecManager() 
 #            varCombo = QComboBox()
-#            for var in varRecs: varCombo.addItem( str(var) ) 
-            otype = 'volume'
-            orec = OutputRec( otype, ndim=3, varList=varRecs )   
-            oRecMgr.addOutputRec( self.datasetId, orec ) 
+            for var in varRecs: 
+                otype = 'volume'
+                orec = OutputRec( otype, ndim=3, varList=[var] )   
+                oRecMgr.addOutputRec( self.datasetId, orec ) 
         else:
             portData = self.getPortData()
             if portData:
@@ -315,10 +309,12 @@ class StructuredDataReader:
             ispec = InputSpecs()
             ispec.initializeInput( self.getCachedImageData( cachedImageDataName ), self.getFieldData() )
             self.outputSpecs.append( ispec )
-#                 if cachedImageDataName: 
-#                     cachedImageData = self.getCachedImageData( cachedImageDataName )            
-#                     if   orec.ndim >= 3: self.set3DOutput( name=orec.name,  output=cachedImageData )
-#                     elif orec.ndim == 2: self.set2DOutput( name=orec.name,  output=cachedImageData )
+#             image_data_specs = cachedImageDataName.split('-')
+#             for image_data_spec in image_data_specs:
+#                 self.output_names.append( image_data_spec )
+#                 ispec = InputSpecs()
+#                 ispec.initializeInput( self.getCachedImageData( image_data_spec ), self.getFieldData() )
+#                 self.outputSpecs.append( ispec )
         self.currentTime = self.getTimestep()
 
     def output( self, iIndex=0 ):

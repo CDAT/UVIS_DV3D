@@ -580,10 +580,14 @@ class DV3DPlot():
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         keysym =  eventArgs[1]            
-        if keysym == "i":  self.clearInteractions()
-        if keysym == "b":  self.toggleColorbarVisibility()
+        if keysym   == "i":  self.clearInteractions()
+        elif keysym == "b":  self.toggleColorbarVisibility()
+#        elif keysym == "2":  self.enableDualInputs()
         else: return False
         return True
+    
+    def enableDualInputs(self):
+        pass
 
     def getLUT( self, cmap_index=0  ):
         colormapManager = self.getColormapManager( index=cmap_index )

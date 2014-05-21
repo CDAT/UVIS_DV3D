@@ -118,6 +118,8 @@ class RectGridPlot(StructuredGridPlot):
         self.zincSkipIndex = 1
         self.state = self.Start
         self.volume = None
+        self.probeFilter = None
+        self.cursorActor     = vtk.vtkActor()
         
         self.levelSetActor = None
         self.surfacePicker = None
@@ -131,6 +133,7 @@ class RectGridPlot(StructuredGridPlot):
         self.updatingOTF = False
         self.configTime = None
         self.clipping_enabled = False
+        self.useClipper = False
         self.cropRegion = None
         self.cropZextent = None
         self.clipper = None
@@ -162,6 +165,7 @@ class RectGridPlot(StructuredGridPlot):
 #        self.addConfigurableBooleanFunction( 'cropRegion', self.toggleClipping, 'X', labels='Start Cropping|End Cropping', signature=[ ( Float, 'xmin'), ( Float, 'xmax'), ( Float, 'ymin'), ( Float, 'ymax'), ( Float, 'zmin'), ( Float, 'zmax') ], group=ConfigGroup.Display )
 #        self.addConfigurableLevelingFunction( 'zScale', 'z', label='Vertical Scale', setLevel=self.setInputZScale, activeBound='max', getLevel=self.getScaleBounds, windowing=False, sensitivity=(10.0,10.0), initRange=[ 2.0, 2.0, 1 ], group=ConfigGroup.Display )
 #        self.addUVCDATConfigGuiFunction( 'renderType', VolumeRenderCfgDialog, 'v', label='Choose Volume Renderer', setValue=self.setVolRenderCfg, getValue=self.getVolRenderCfg, layerDependent=True, group=ConfigGroup.Rendering )
+
 
     def processOpacityScalingCommand( self, args, config_function = None ):
         opacityRange = config_function.value
@@ -295,7 +299,8 @@ class RectGridPlot(StructuredGridPlot):
             self.render() 
         elif args and args[0] == "ProcessSliderInit":
             for plane_index in range(3):
-                self.modifySlicePlaneVisibility( plane_index, 'xyz'[plane_index]  )              
+                self.modifySlicePlaneVisibility( plane_index, 'xyz'[plane_index]  ) 
+            self.render()              
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -612,13 +617,26 @@ class RectGridPlot(StructuredGridPlot):
                     textDisplay += ", Texture value: %.3G %s" % ( tex_data_value, texture_ispec.units )
                 self.updateTextDisplay( textDisplay )                        
 
+    def enableDualInputs(self):
+        if self.levelSetActor <> None:
+            if self.probeFilter == None:
+                ispec = self.getInputSpec( 1 )   
+                self.probeFilter = vtk.vtkProbeFilter()
+                textureRange = ispec.GetScalarRange()
+                self.probeFilter.SetSource( ispec )
+                self.generateTexture = True
+                mapperInputPort = self.polyClipper.GetOutputPort() if self.useClipper else self.levelSetFilter.GetOutputPort()
+                self.probeFilter.SetInputConnection( mapperInputPort )
+                self.levelSetMapper.SetInputConnection( self.probeFilter.GetOutputPort() ) 
+                self.levelSetMapper.SetScalarRange( textureRange )
+
+
     def buildIsosurfacePipeline(self):
         """ execute() -> None
         Dispatch the vtkRenderer to the actual rendering widget
         """ 
         
-        useClipper = False
-        texture_ispec = self.getInputSpec(  1 )                
+        texture_ispec = self.getInputSpec( 1 )                
         xMin, xMax, yMin, yMax, zMin, zMax = self.input().GetWholeExtent()       
         self.sliceCenter = [ (xMax-xMin)/2, (yMax-yMin)/2, (zMax-zMin)/2  ]       
         spacing = self.input().GetSpacing()
@@ -651,7 +669,7 @@ class RectGridPlot(StructuredGridPlot):
         if vtk.VTK_MAJOR_VERSION <= 5:  self.levelSetFilter.SetInput(self.input())
         else:                           self.levelSetFilter.SetInputData(self.input())        
 
-        if useClipper:
+        if self.useClipper:
             self.clipPlanes = vtk.vtkPlanes() 
             self.polyClipper = vtk.vtkClipPolyData()
             self.polyClipper.SetInputConnection( self.levelSetFilter.GetOutputPort() )
@@ -660,7 +678,7 @@ class RectGridPlot(StructuredGridPlot):
                 
         self.levelSetMapper = vtk.vtkPolyDataMapper()
         self.levelSetMapper.SetColorModeToMapScalars()
-        mapperInputPort = self.polyClipper.GetOutputPort() if useClipper else self.levelSetFilter.GetOutputPort()
+        mapperInputPort = self.polyClipper.GetOutputPort() if self.useClipper else self.levelSetFilter.GetOutputPort()
         if ( self.probeFilter == None ):
             imageRange = self.getImageValues( self.range ) 
             self.levelSetMapper.SetInputConnection( mapperInputPort ) 
@@ -670,7 +688,9 @@ class RectGridPlot(StructuredGridPlot):
             self.levelSetMapper.SetInputConnection( self.probeFilter.GetOutputPort() ) 
             self.levelSetMapper.SetScalarRange( textureRange )
             
-        colormapManager = self.getColormapManager( index=1 ) if texture_ispec and texture_ispec.input() else self.getColormapManager()                  
+        colormapManager = self.getColormapManager( index=1 ) if texture_ispec and texture_ispec.input() else self.getColormapManager() 
+        self.scaleColormap( textureRange, 1 )                 
+#        colormapManager = self.getColormapManager()                  
         colormapManager.setAlphaRange ( [ 1, 1 ] ) 
         self.levelSetMapper.SetLookupTable( colormapManager.lut ) 
         self.levelSetMapper.UseLookupTableScalarRangeOn()
@@ -683,7 +703,6 @@ class RectGridPlot(StructuredGridPlot):
 #            levelSetActor.SetProperty( self.levelSetProperty )              
         self.levelSetActor.SetMapper( self.levelSetMapper )
 
-        self.cursorActor     = vtk.vtkActor()
         self.cursorProperty  = None 
         self.cursor = vtk.vtkSphereSource()
         self.cursor.SetRadius(2.0)
@@ -783,7 +802,7 @@ class RectGridPlot(StructuredGridPlot):
 
     def buildPipeline(self):
 
-        contour_ispec = None # self.getInputSpec(  1 )       
+        contour_ispec = self.getInputSpec(  1 )       
 
         contourInput = contour_ispec.input() if contour_ispec <> None else None
         primaryInput = self.input()
@@ -863,6 +882,8 @@ class RectGridPlot(StructuredGridPlot):
         if (contour_ispec <> None) and (contour_ispec.input() <> None) and (self.contours == None):
             rangeBounds = self.getRangeBounds(1)
             colormapManager = self.getColormapManager( index=1 )
+            self.scaleColormap( rangeBounds, 1 )
+#            colormapManager = self.getColormapManager()
             self.generateContours = True   
             self.contours = vtk.vtkContourFilter()
             self.contours.GenerateValues( self.NumContours, rangeBounds[0], rangeBounds[1] )
@@ -948,6 +969,7 @@ class RectGridPlot(StructuredGridPlot):
         isVisible = self.levelSetActor.GetVisibility()
         if isVisible: 
             self.levelSetActor.VisibilityOff()
+            self.cursorActor.VisibilityOff()
         else: 
             self.levelSetActor.VisibilityOn()
         self.render()
@@ -1217,10 +1239,9 @@ class RectGridPlot(StructuredGridPlot):
         if (ispec <> None) and (ispec.input() <> None):
             contourInput = ispec.input() 
             ix, iy, iz = contourInput.GetSpacing()
-            sz = zscale_data[1]
+            sz = zscale_data[0]
             contourInput.SetSpacing( ix, iy, sz )  
             contourInput.Modified() 
-
               
     def getOpacity(self):
         return self.opacity
@@ -1284,10 +1305,22 @@ class RectGridPlot(StructuredGridPlot):
             self.slicePlanesVisible[ slider_index ] = make_visible
         if make_visible:   
             plane_widget.VisibilityOn()
-            if plane == 'z': self.basemapLinesVisibilityOn()
+            if plane == 'z': 
+                if self.generateContours:
+                    self.setContourVisibility( slider_index, True ) 
+                else: 
+                    self.basemapLinesVisibilityOn()
+            else:
+                self.setContourVisibility( slider_index, True )
         else:               
             plane_widget.VisibilityOff()
-            if plane == 'z': self.basemapLinesVisibilityOff()
+            if plane == 'z': 
+                if self.generateContours:
+                    self.setContourVisibility( slider_index, False ) 
+                else: 
+                    self.basemapLinesVisibilityOff()
+            else:
+                self.setContourVisibility( slider_index, False )
                 
                                                                         
 
@@ -1472,7 +1505,8 @@ class RectGridPlot(StructuredGridPlot):
         if contourLineActor == None:
             contourLineActor = vtk.vtkActor()
             contourLineActor.SetMapper(self.contourLineMapperer)
-            contourLineActor.GetProperty().SetLineWidth(2)     
+            contourLineActor.GetProperty().SetLineWidth(2) 
+            contourLineActor.VisibilityOff( )    
             self.renderer.AddActor( contourLineActor ) 
             self.contourLineActors[iAxis] = contourLineActor
             self.setContourActorOrientation( iAxis, contourLineActor )
@@ -1484,6 +1518,12 @@ class RectGridPlot(StructuredGridPlot):
         for contourLineActorItem in self.contourLineActors.items():
             if iAxis == contourLineActorItem[0]:    contourLineActorItem[1].VisibilityOn( )
             else:                                   contourLineActorItem[1].VisibilityOff( )
+
+    def setContourVisibility( self, iAxis, isVisible ):
+        contourLineActor = self.contourLineActors.get( iAxis, None )
+        if contourLineActor <> None:
+            if isVisible:    contourLineActor.VisibilityOn( )
+            else:            contourLineActor.VisibilityOff( )
        
     def getAdjustedSliceExtent( self ):
         ext = None

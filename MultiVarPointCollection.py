@@ -439,13 +439,12 @@ class MultiVarPointCollection():
 
     def initialize( self, args, **cfg_args ): 
         self.configure( **cfg_args )
-        ( grid_file, data_file, interface, grd_varname, grd_coords, var_proc_op, ROI, subSpace ) = args
+        ( grid_file, data_file, interface, grd_varnames, grd_coords, var_proc_op, ROI, subSpace ) = args
         self.interface = interface
         self.roi = ROI
         self.gf = cdms2.open( grid_file ) if grid_file else None
         self.df = cdms2.open( data_file )       
-        if not grd_varname: grd_varname = self.df.variables[0]
-        self.grid_varname = grd_varname
+        self.grid_varname = grd_varnames[0] if ( grd_varnames <> None ) else self.df.variables[0]
         self.grid_coords = grd_coords
         self.initPoints( var_proc_op )
         

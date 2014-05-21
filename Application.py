@@ -22,9 +22,9 @@ class DV3D:
     def init(self, **args ):
         
         init_args = args[ 'init' ]
-        ( grid_file, data_file, interface, varname, grd_coords, var_proc_op, ROI, subSpace ) = init_args
+        ( grid_file, data_file, interface, varnames, grd_coords, var_proc_op, ROI, subSpace ) = init_args
         df = cdms2.open( data_file )       
-        var = df[ varname ]
+        var = df[ varnames[0] ]
         grid_metadata = var.getGrid()
 
         plot_type = PlotType.getPointsLayout( grid_metadata )
