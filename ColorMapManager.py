@@ -249,16 +249,23 @@ class ColorMapManager():
         return color           
 
     def load_lut(self, value=None):
-        if( value <> None ): self.colormapName = str( value )
-        hue_range = None
-#        print " --> Load LUT: %s " % self.colormapName  
-       
+        if( value <> None ): self.colormapName = str( value )       
         if self.colormapName == 'file':
             if self.file_name:
-                self.load_lut_from_file(self.file_name)
-            #self.lut.force_build()
-            return
-        
+                self.load_lut_from_file(self.file_name)        
+        elif self.colormapName in colormaps:
+            lut = self.load_array()
+            self.load_lut_from_list(lut.tolist())
+        else:
+            print>>sys.stderr, "Error-- Unrecognized colormap: %s" % self.colormapName
+            
+        self.display_lut.SetTable( self.lut.GetTable() )
+        self.display_lut.SetValueRange( self.lut.GetValueRange() )
+        self.display_lut.Modified()
+
+    def load_array(self, name=None):
+        if( name <> None ): 
+            self.colormapName = str( name )
         reverse = self.invertColormap
         if self.colormapName in colormaps:
             lut = colormaps[self.colormapName]
@@ -268,13 +275,8 @@ class ColorMapManager():
             n_color = self.number_of_colors
             if not n_color >= n_total:
                 lut = lut[::round(n_total/float(n_color))]
-            self.load_lut_from_list(lut.tolist())
         else:
-            print>>sys.stderr, "Error-- Unrecognized colormap: %s" % self.colormapName
-            
-        self.display_lut.SetTable( self.lut.GetTable() )
-        self.display_lut.SetValueRange( self.lut.GetValueRange() )
-        self.display_lut.Modified()
-    
+            print>>sys.stderr, "Error-- Unrecognized colormap: %s" % self.colormapName           
+        return lut
 
  
