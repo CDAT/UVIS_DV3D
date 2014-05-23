@@ -5,7 +5,7 @@ Hacked from the Enthought MayaVi2 lut_manager
 '''
 
 import os.path
-import sys, vtk
+import sys, vtk, copy
 import cPickle
 
 pkl_path = os.path.join( os.path.dirname( __file__ ), 'data', 'colormaps.pkl' )
@@ -276,7 +276,8 @@ class ColorMapManager():
             if not n_color >= n_total:
                 lut = lut[::round(n_total/float(n_color))]
         else:
-            print>>sys.stderr, "Error-- Unrecognized colormap: %s" % self.colormapName           
+            print>>sys.stderr, "Error-- Unrecognized colormap: %s" % self.colormapName  
+            return None         
         return lut
 
  

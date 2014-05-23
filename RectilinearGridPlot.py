@@ -184,7 +184,8 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            opacityRange.setValue( args[1], args[2] )
+            val = args[2].GetValue()     
+            opacityRange.setValue( args[1], val )
             orange = opacityRange.getValues()
             self.setOpacity( orange )
             self.adjustOpacity( orange )
@@ -210,7 +211,8 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            colorScaleRange.setValue( args[1], args[2] )
+            value = args[2].GetValue() 
+            colorScaleRange.setValue( args[1], value )
             cscale = colorScaleRange.getValues()
             self.scaleColormap( cscale )
             self.generateCTF( cscale )
@@ -241,8 +243,9 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            isosurfaceValue.setValues( args[2:] )
-            self.setIsosurfaceLevel( args[2] ) 
+            value = args[2].GetValue()
+            isosurfaceValue.setValue( 0, value )
+            self.setIsosurfaceLevel( value ) 
  
     def processThresholdRangeCommand( self, args, config_function = None ):
         volumeThresholdRange = config_function.value
@@ -265,7 +268,8 @@ class RectGridPlot(StructuredGridPlot):
             pass
         elif args and args[0] == "UpdateConfig":
             vt_range = self.getSgnRangeBounds()
-            vt_range[ args[1] ] = args[2]
+            value = args[2].GetValue()
+            vt_range[ args[1] ] = value
             self.generateOTF( vt_range )
             volumeThresholdRange.setValues( vt_range )
 
@@ -306,8 +310,9 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            plane_widget.SetSlicePosition( args[2] )
-            slicePosition.setValues( args[2:] )
+            value = args[2].GetValue()
+            plane_widget.SetSlicePosition( value )
+            slicePosition.setValues( [ value ] )
             if config_function.key == 'z':
                 self.ProcessIPWAction( plane_widget, ImagePlaneWidget.InteractionUpdateEvent, action = ImagePlaneWidget.Pushing )
 

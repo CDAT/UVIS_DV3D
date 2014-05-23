@@ -459,8 +459,9 @@ class CPCPlot( DV3DPlot ):
             sliceParam.setValue( 0, spos )
             self.execCurrentSlice( spos=spos )
         elif args and args[0] == "UpdateConfig":
-            sliceParam.setValue( 0, args[2] )
-            self.execCurrentSlice(spos=args[2])
+            value = args[2].GetValue()
+            sliceParam.setValue( 0, value )
+            self.execCurrentSlice(spos=value)
     
     def processThresholdRangeCommand( self, args, config_function = None ):
         print " ---->>  processThresholdRangeCommand: %s[%d] " % ( args[0], self.thresholdCmdIndex )
@@ -493,8 +494,9 @@ class CPCPlot( DV3DPlot ):
             self.render()
         elif args and args[0] == "UpdateConfig":
             if ( self.thresholdCmdIndex % self.thresholdingSkipFactor ) == 0:
+                value = args[2].GetValue()
                 vt_range = list( volumeThresholdRange.getValue( self.defvar ) )
-                vt_range[ args[1] ] = args[2]
+                vt_range[ args[1] ] = value
                 volumeThresholdRange.setValue( self.defvar, vt_range )
                 volumeThresholdRange.setValues( vt_range )
                 self.updateThresholding( self.defvar, vt_range, False )
@@ -539,7 +541,8 @@ class CPCPlot( DV3DPlot ):
                 pc.setScalarRange( scalarRange.getValues() )  
                 pc.refresh(True) 
         elif args and args[0] == "UpdateConfig": 
-            scalarRange.setValue( args[1], args[2] )
+            value = args[2].GetValue()
+            scalarRange.setValue( args[1], value )
             srange = scalarRange.getValues()        
             self.point_cloud_overview.setScalarRange( srange ) 
             self.setColorbarRange( srange ) 
@@ -704,9 +707,10 @@ class CPCPlot( DV3DPlot ):
             pc.refresh(True) 
             self.render() 
         elif arg and arg[0] == "UpdateConfig": 
+            value = arg[2].getValue()
             resolution = arg[1]
             current_point_size = pointSize.getValue( resolution )  
-            new_point_size = int( round( arg[2] ) )
+            new_point_size = int( round( value ) )
             if (current_point_size <> new_point_size ):
                 print " UpdateConfig, resolution = %s, new_point_size = %s " % ( str( resolution ), str( new_point_size ) )
                 pointSize.setValue(resolution, new_point_size )      
@@ -745,7 +749,7 @@ class CPCPlot( DV3DPlot ):
             self.render() 
         elif arg and arg[0] == "UpdateConfig": 
             resolution = arg[1]
-            new_slice_width = arg[2]
+            new_slice_width = arg[2].getValue()
             sliceWidth = sliceProp.getValue( resolution ) 
             if sliceWidth <> new_slice_width:
                 sliceProp.setValue( resolution, new_slice_width )
@@ -839,7 +843,7 @@ class CPCPlot( DV3DPlot ):
         if args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
         elif args[0] == "UpdateConfig": 
-            oval[ args[1] ] = args[2]
+            oval[ args[1] ] = args[2].GetValue()
             oscale.setValues( oval )       
         colormapManager = self.getColormapManager()
         alpha_range = colormapManager.getAlphaRange()
@@ -882,9 +886,10 @@ class CPCPlot( DV3DPlot ):
             self.render() 
         elif args and args[0] == "InitConfig":
                 self.updateTextDisplay( config_function.label )                      
-        elif args and args[0] == "UpdateConfig":           
-            vscale.setValue( 0, args[2] ) 
-            scaling_spec = ( self.vertVar, args[2] )
+        elif args and args[0] == "UpdateConfig":  
+            val = args[2].GetValue()         
+            vscale.setValue( 0, val ) 
+            scaling_spec = ( self.vertVar, val )
             self.point_cloud_overview.generateZScaling( spec=scaling_spec )
             self.render()
                         

@@ -414,8 +414,8 @@ class ConfigurableFunction:
         self.units = args.get( 'units', '' ).strip().lower()
         self.key = key
         self.state = None
+        self.initial_value = makeList( args.get( 'initValue', None ), self.getValueLength() )
 #        self.group = args.get( 'group', ConfigGroup.Display )  
-        self.sliderLabels = makeList( args.get( 'sliderLabels', [ 'Range Min', 'Range Max' ] ) )
         self.active = args.get( 'active', True )
         self._persisted = True
         self.interactionHandler = args.get( 'interactionHandler', None )
@@ -424,11 +424,17 @@ class ConfigurableFunction:
     def activate( cls ):
         cls.CfgManager.initParameters()
         
+    def getValueLength(self):
+        return 1
+        
     def open(self, state ):
         self.state = state
-        
-    def close(self) :
+
+    def start( self, interactionState, x, y ) :
         pass
+           
+    def close(self) :
+        self.processInteractionEvent( [ "Close" ] )
         
     def processInteractionEvent( self, args ):
         if self.interactionHandler:
@@ -480,11 +486,11 @@ class ConfigurableFunction:
 class ConfigurableSliderFunction( ConfigurableFunction ):
 
     def __init__( self, name, key=None, **args ):
+        self.sliderLabels = makeList( args.get( 'sliderLabels', [ 'Range Min', 'Range Max' ] ) )
         ConfigurableFunction.__init__( self, name, key, **args  )
         self.StartSlidingSignal =SIGNAL('startSliding')
         self.UpdateSlidingSignal =SIGNAL('updateSliding')
         self.type = 'slider'
-        self.initial_value = makeList( args.get( 'initValue', None ), len( self.sliderLabels ) )
         self._range_bounds = args.get( 'range_bounds', None )
         self._initial_range = None
         self.position = args.get( 'position', None )
@@ -497,6 +503,9 @@ class ConfigurableSliderFunction( ConfigurableFunction ):
             self._initial_range = self._range_bounds
         if self._initial_range <> None:
             self._range_bounds = [ irv * scale_factor for irv in self._initial_range ]
+
+    def getValueLength(self):
+        return len( self.sliderLabels )
         
     def getRangeBounds(self):
         return copy.copy( self._range_bounds )

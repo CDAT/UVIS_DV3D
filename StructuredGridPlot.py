@@ -53,8 +53,9 @@ class StructuredGridPlot(DV3DPlot):
         elif args and args[0] == "UpdateConfig":
             count = verticalScale.incrementValue( 'count' )
             if count % self.zincSkipIndex == 0:
+                value = args[2].GetValue()
                 vscale = verticalScale.getValues()
-                vscale[ args[1] ] = args[2]
+                vscale[ args[1] ] = value
                 self.setZScale( vscale )
                 verticalScale.setValues( vscale )
 

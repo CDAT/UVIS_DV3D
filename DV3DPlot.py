@@ -120,11 +120,14 @@ class DV3DPlot():
         self.InteractionState = None
         self.LastInteractionState = None
         self.colormapManagers= {}
-        self.currentSliders = {} 
+        self.currentSliders = {}
+        self.colormapWidget = None 
+        self.colormapWindowSize = None
         self.addConfigurableSliderFunction( 'zScale', 'Z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0  )
+        self.addConfigurableFunction( 'colormap', 'm', label='Choose Colormap', interactionHandler=self.processChooseColormapCommand, initValue=[ 'jet', False, False ]  )
 
-    def addConfigurableFunction(self, name, function_args, key, **args):
-        self.configurableFunctions[name] = ConfigurableFunction( name, function_args, key, **args )
+    def addConfigurableFunction(self, name, key, **args):
+        self.configurableFunctions[name] = ConfigurableFunction( name, key, **args )
 
     def addConfigurableSliderFunction(self, name, key, **args):
         self.configurableFunctions[name] = ConfigurableSliderFunction( name, key, **args )
@@ -142,12 +145,39 @@ class DV3DPlot():
     def updateSliderWidgets(self, value0, value1 ): 
         for index, value in enumerate( ( value0, value1 ) ):
             if value <> None: self.setSliderValue( index, value )
-                 
+
+    def processVerticalScalingCommand( self, args, config_function ):
+        pass 
+    
+
+    def processChooseColormapCommand( self, args, config_function ):
+        from ListWidget import ColorbarListWidget
+        colormapParam = config_function.value
+        if args and args[0] == "StartConfig":
+            pass
+        elif args and args[0] == "Init":
+            self.setColormap( config_function.initial_value )
+        elif args and args[0] == "EndConfig":
+            pass
+        elif args and args[0] == "InitConfig":
+            if ( self.colormapWidget == None ) or self.colormapWidget.checkWindowSizeChange():
+                self.colormapWidget = ColorbarListWidget( self.renderWindowInteractor ) 
+                self.colormapWidget.StateChangedSignal.connect( self.processInteractionEvent )
+            self.colormapWidget.toggleVisibility()
+        elif args and args[0] == "Open":
+            pass
+        elif args and args[0] == "Close":
+            self.colormapWidget.hide()
+        elif args and args[0] == "UpdateConfig":
+            cmap_data = args[3]
+            self.setColormap( cmap_data )
+            colormapParam.setValues( cmap_data  )
+                     
     def setSliderValue(self, index, value ):
         ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
         if swidget:
             srep = swidget.GetRepresentation( )   
-            srep.SetValue( value )
+            srep.SetValue( value  )
             
     def createSliderWidget( self, index ): 
         sliderRep = vtk.vtkSliderRepresentation2D()
@@ -233,12 +263,12 @@ class DV3DPlot():
             swidget.SetEnabled( 0 ) 
         self.render()
 
-    def processInteractionEvent( self, obj=None, event=None ):
+    def processInteractionEvent( self, obj=None, event=[] ):
 #        print " processInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
         if ( self.InteractionState <> None ): 
             srep = obj.GetRepresentation( ) 
             config_function = self.getConfigFunction( self.InteractionState )
-            config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep.GetValue() ] )                         
+            config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep, event  ] )                         
 #         else:
 #             if self.process_mode == ProcessMode.Slicing:
 #                 ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
@@ -317,25 +347,26 @@ class DV3DPlot():
         return 0
 
     def onLeftButtonPress( self, caller, event ):
-#        istyle = self.renderWindowInteractor.GetInteractorStyle()
-#        print "(%s)-LBP: s = %s, nis = %s " % ( getClassName( self ), getClassName(istyle), getClassName(self.navigationInteractorStyle) )
-        if not self.finalizeLeveling(): 
-#            shift = caller.GetShiftKey()
-            self.currentButton = self.LEFT_BUTTON
- #           self.clearInstructions()
-            self.UpdateCamera()   
-            x, y = caller.GetEventPosition()      
-            self.startConfiguration( x, y, [ 'leveling', 'generic' ] )  
         return 0
+#        istyle = self.renderWindowInteractor.GetInteractorStyle()
+# #        print "(%s)-LBP: s = %s, nis = %s " % ( getClassName( self ), getClassName(istyle), getClassName(self.navigationInteractorStyle) )
+#         if not self.finalizeLeveling(): 
+# #            shift = caller.GetShiftKey()
+#             self.currentButton = self.LEFT_BUTTON
+#  #           self.clearInstructions()
+#             self.UpdateCamera()   
+#             x, y = caller.GetEventPosition()      
+#             self.startConfiguration( x, y, [ 'leveling', 'generic' ] )  
+#         return 0
 
     def onRightButtonPress( self, caller, event ):
-        shift = caller.GetShiftKey()
-        self.currentButton = self.RIGHT_BUTTON
- #       self.clearInstructions()
-        self.UpdateCamera()
-        x, y = caller.GetEventPosition()
-        if self.InteractionState <> None:
-            self.startConfiguration( x, y,  [ 'generic' ] )
+#         shift = caller.GetShiftKey()
+#         self.currentButton = self.RIGHT_BUTTON
+#  #       self.clearInstructions()
+#         self.UpdateCamera()
+#         x, y = caller.GetEventPosition()
+#         if self.InteractionState <> None:
+#             self.startConfiguration( x, y,  [ 'generic' ] )
         return 0
 
     def onLeftButtonRelease( self, caller, event ):
@@ -414,7 +445,7 @@ class DV3DPlot():
         else:            
             if self.InteractionState <> None: 
                 configFunct = self.configurableFunctions[ self.InteractionState ]
-                configFunct.close()   
+                configFunct.close()                 
             configFunct = self.configurableFunctions.get( state, None )
             if configFunct and ( configFunct.type <> 'generic' ): 
                 rcf = configFunct
@@ -423,14 +454,17 @@ class DV3DPlot():
                 configFunct = ConfigurableFunction( state, None, None )              
                 self.configurableFunctions[ state ] = configFunct
             if configFunct:
+                if configFunct.type <> 'slider': 
+                    self.releaseSliders() 
                 configFunct.open( state )
                 self.InteractionState = state                   
                 self.LastInteractionState = self.InteractionState
                 self.disableVisualizationInteraction()               
+                configFunct.processInteractionEvent( [ "InitConfig" ] )
+                
                 if (configFunct.type == 'slider'):
                     force_enable = args.get( 'enable', False )
 #                    self.slicePlanesVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
-                    configFunct.processInteractionEvent( [ "InitConfig" ] )
                     self.current_configuration_mode = configFunct.label
                     tvals = configFunct.value.getValues()
                     if configFunct.position <> None:
@@ -520,6 +554,12 @@ class DV3DPlot():
     def onModified(self, caller, event):
 #        print " --- Modified Event --- "
         return 0
+
+    def onAnyEvent(self, caller, event):
+        print " --- %s Event --- " % event
+        return 0
+    
+    
     
     def onRender(self, caller, event):
         return 0
@@ -540,6 +580,11 @@ class DV3DPlot():
             self.addObserver( self.renderWindowInteractor, 'LeftButtonReleaseEvent', self.onLeftButtonRelease )
             self.addObserver( self.renderWindowInteractor, 'RightButtonReleaseEvent', self.onRightButtonRelease )
             self.addObserver( self.renderWindowInteractor, 'RightButtonPressEvent', self.onRightButtonPress )
+            self.addObserver( self.renderWindowInteractor, 'RenderWindowMessageEvent', self.onAnyEvent )
+            self.addObserver( self.renderWindowInteractor, 'ResetCameraEvent', self.onAnyEvent )
+            self.addObserver( self.renderWindowInteractor, 'ResetCameraClippingRangeEvent', self.onAnyEvent )
+            self.addObserver( self.renderWindowInteractor, 'ComputeVisiblePropBoundsEvent', self.onAnyEvent )
+            self.addObserver( self.renderWindowInteractor, 'UpdateSizeEvent', self.onAnyEvent )
             self.updateInteractor() 
             self.activated = True 
 
@@ -616,19 +661,17 @@ class DV3DPlot():
     def setColormap( self, data, **args ):
         colormapName = str(data[0])
         invertColormap = getBool( data[1] ) 
-        enableStereo = getBool( data[2] )
-        show_colorBar = getBool( data[3] ) if ( len( data ) > 3 ) else 0 
         cmap_index = args.get( 'index', 0 )
         metadata = self.getMetadata()
         var_name = metadata.get( 'var_name', '')
         var_units = metadata.get( 'var_units', '')
-        self.updateStereo( enableStereo )
+#        self.updateStereo( enableStereo )
         colormapManager = self.getColormapManager( name=colormapName, invert=invertColormap, index=cmap_index, units=var_units )
         if( colormapManager.colorBarActor == None ): 
             cm_title = str.replace( "%s (%s)" % ( var_name, var_units ), " ", "\n" )
             cmap_pos = [ 0.9, 0.2 ] if (cmap_index==0) else [ 0.02, 0.2 ]
             self.renderer.AddActor( colormapManager.createActor( pos=cmap_pos, title=cm_title ) )
-        colormapManager.setColorbarVisibility( show_colorBar )
+#        colormapManager.setColorbarVisibility( show_colorBar )
         self.render() 
         return True
         return False 
