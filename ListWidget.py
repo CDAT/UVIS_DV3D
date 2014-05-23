@@ -25,7 +25,8 @@ class ListWidget:
     def processStateChangeEvent( self, button, event ):
         button_rep = button.GetSliderRepresentation()
         state = button_rep.GetState()
-        button_id = self.buttons[ button ]
+        button_specs = self.buttons[ button ]
+        button_id = button_specs[ 0 ]
         self.StateChangedSignal( button, [ button_id, state ] )
     
     def getButton( self, **args ):
@@ -38,7 +39,7 @@ class ListWidget:
         buttonWidget.SetInteractor(self.interactor)
         buttonWidget.SetRepresentation(buttonRepresentation)
         buttonWidget.AddObserver( 'StateChangedEvent', self.processStateChangeEvent )
-        self.buttons[ buttonWidget ] = button_id
+        self.buttons[ buttonWidget ] = [ button_id, position, size ]
         return buttonWidget
 
     def checkWindowSizeChange( self ):
@@ -47,7 +48,17 @@ class ListWidget:
             self.windowSize = new_window_size
             return True
         else: 
-            return False 
+            return False
+        
+    def updatePositions(self): 
+        if self.checkWindowSizeChange():
+            for button_item in self.buttons.items():
+                button = button_item[0]
+                [ button_id, position, size ] = button_item[1]
+                brep = button.GetRepresentation()
+                brep.PlaceWidget( self.computeBounds(position,size) )
+                brep.Modified()
+                button.Modified()
     
     def build(self):
         pass
@@ -59,7 +70,7 @@ class ListWidget:
         self.visible = True
         for button in self.buttons.keys():
             button.On()
-            button.Render()
+#            button.Render()
  
     def hide(self):
         self.visible = False
@@ -67,8 +78,11 @@ class ListWidget:
             button.Off()
             
     def toggleVisibility(self):
-        if self.visible: self.hide()
-        else: self.show()
+        if self.visible: 
+            self.hide()
+        else:
+            self.updatePositions() 
+            self.show()
             
     def getRenderer(self):
         rw = self.interactor.GetRenderWindow()

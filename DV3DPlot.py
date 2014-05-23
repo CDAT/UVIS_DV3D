@@ -160,7 +160,7 @@ class DV3DPlot():
         elif args and args[0] == "EndConfig":
             pass
         elif args and args[0] == "InitConfig":
-            if ( self.colormapWidget == None ) or self.colormapWidget.checkWindowSizeChange():
+            if ( self.colormapWidget == None ): #  or self.colormapWidget.checkWindowSizeChange():
                 self.colormapWidget = ColorbarListWidget( self.renderWindowInteractor ) 
                 self.colormapWidget.StateChangedSignal.connect( self.processInteractionEvent )
             self.colormapWidget.toggleVisibility()
@@ -445,7 +445,8 @@ class DV3DPlot():
         else:            
             if self.InteractionState <> None: 
                 configFunct = self.configurableFunctions[ self.InteractionState ]
-                configFunct.close()                 
+                if configFunct.name <> state:
+                    configFunct.close()                 
             configFunct = self.configurableFunctions.get( state, None )
             if configFunct and ( configFunct.type <> 'generic' ): 
                 rcf = configFunct
