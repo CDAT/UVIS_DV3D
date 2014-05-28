@@ -28,7 +28,7 @@ class ListWidget:
         button_specs = self.buttons[ button ]
         button_id = button_specs[ 0 ]
         self.StateChangedSignal( button, [ button_id, state ] )
-    
+            
     def getButton( self, **args ):
         button_id, buttonRepresentation = self.getButtonRepresentation( **args )
         buttonRepresentation.SetPlaceFactor( args.get( 'scale', 1 ) )
@@ -132,7 +132,7 @@ class ColorbarListWidget(ListWidget):
         dy = 1.0 / len( cmap_names )
         for cmap_index, cmap_name in enumerate( cmap_names ):
             self.getButton( name=cmap_name, position = ( 1.0, 1.0 - dy * cmap_index )  )
-                 
+                             
     def getButtonRepresentation(self, **args):
         buttonRepresentation = vtk.vtkTexturedButtonRepresentation2D()
         cmap_name = args.get( 'name', None )

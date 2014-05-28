@@ -566,8 +566,9 @@ class StructuredGridPlot(DV3DPlot):
         self.variable_reader.execute( )       
         self.execute( )
         self.initializePlots()
+        self.showConfigureButton()
         self.start()
-        if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
+#        if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
         
     def initializePlots(self):
         pass

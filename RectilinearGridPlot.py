@@ -1002,7 +1002,12 @@ class RectGridPlot(StructuredGridPlot):
         elif (  key == 'p'  ):    self.toggleSliceVisibility() 
         elif (  key == 's'  ):    self.toggleIsosurfaceVisibility()             
         else:                   return StructuredGridPlot.onKeyEvent( self, eventArgs )
-        return 1                                                                                       
+        return 1 
+    
+    def showConfigureButton(self):                                                                                      
+        config_button = self.getButton( names=['Configure'] ) # names=['ScaleColormap'] ) Configure
+        config_button.On()
+        self.render()
                
     def generateCTF( self, ctf_data= None, cmap_index=0, **args  ):
         if ctf_data: self.ctf_data = ctf_data

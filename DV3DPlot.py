@@ -75,7 +75,9 @@ class TextDisplayMgr:
         textActor.VisibilityOff()
         textActor.id = aid
         return textActor 
-    
+
+
+        
 class DV3DPlot():  
     
     NoModifier = 0
@@ -114,6 +116,8 @@ class DV3DPlot():
         self.configurableFunctions = {}
         self.configurationInteractorStyle = vtk.vtkInteractorStyleUser()
         self.activated = False
+        self.buttons = {}
+        self.renderWindowSize = None
 
         self.isAltMode = False
         self.createColormap = True
@@ -148,7 +152,44 @@ class DV3DPlot():
 
     def processVerticalScalingCommand( self, args, config_function ):
         pass 
+
+#     def get3DButtonRepresentation(self, **args):
+#         buttonRepresentation = vtk.vtkProp3DButtonRepresentation() 
+#         buttonRepresentation.FollowCameraOn()
+#         buttonRepresentation.SetNumberOfStates(1)
+#         button_text = args.get( 'text', 'button test' )
+#         button_position = args.get( 'position', [ 0, 0, 0 ] )
+#         button_scale = args.get( 'scale', [ 0.2, 0.2, 0.2 ] )
+#         button_id = args.get( 'id', button_text )
+#         atext = vtk.vtkVectorText()
+#         atext.SetText( button_text )
+#         textMapper = vtk.vtkPolyDataMapper()
+#         textMapper.SetInputConnection(atext.GetOutputPort())
+#         textActor = vtk.vtkFollower()
+#         textActor.SetMapper(textMapper)
+#         textActor.SetScale( button_scale  )
+#         textActor.AddPosition( button_position )
+#         buttonRepresentation.SetButtonProp( 0, textActor ) 
+#         renderer = self.getRenderer()
+#         renderer.AddActor( textActor )
+#         return button_id, buttonRepresentation
     
+    def getRenderer(self):
+        return self.renderWindow.GetRenderers().GetFirstRenderer ()
+        
+       
+#     def getButton( self, **args ):
+#         button_id, buttonRepresentation = self.get3DButtonRepresentation( **args )
+#         buttonWidget = vtk.vtkButtonWidget()
+#         buttonWidget.SetInteractor( self.renderWindowInteractor )
+#         position = args.get( 'position', [ 1.0, 1.0 ] )
+#         size = args.get( 'size', [ 100.0, 20.0 ] )
+#         buttonRepresentation.PlaceWidget( self.computeBounds(position,size) )
+#         buttonWidget.SetRepresentation(buttonRepresentation)
+#         buttonWidget.AddObserver( 'StateChangedEvent', self.processStateChangeEvent )
+#         self.buttons[ buttonWidget ] = [ button_id, position, size ]
+#         return buttonWidget       
+
 
     def processChooseColormapCommand( self, args, config_function ):
         from ListWidget import ColorbarListWidget
@@ -172,6 +213,15 @@ class DV3DPlot():
             cmap_data = args[3]
             self.setColormap( cmap_data )
             colormapParam.setValues( cmap_data  )
+            
+    def repositionButtons(self):
+        for button_item in self.buttons.items():
+            button = button_item[0]
+            [ button_id, position, size ] = button_item[1]
+            brep = button.GetRepresentation()
+            brep.PlaceWidget( self.computeBounds(position,size) )
+            brep.Modified()
+            button.Modified()
                      
     def setSliderValue(self, index, value ):
         ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
@@ -586,8 +636,21 @@ class DV3DPlot():
             self.addObserver( self.renderWindowInteractor, 'ResetCameraClippingRangeEvent', self.onAnyEvent )
             self.addObserver( self.renderWindowInteractor, 'ComputeVisiblePropBoundsEvent', self.onAnyEvent )
             self.addObserver( self.renderWindowInteractor, 'UpdateSizeEvent', self.onAnyEvent )
+            renWin = self.renderWindowInteractor.GetRenderWindow()   
+            renWin.AddObserver( 'ModifiedEvent', self.onWindowModified )
             self.updateInteractor() 
             self.activated = True 
+            
+    def onWindowModified( self, caller, event ):
+        renwin = caller
+        window_size = renwin.GetSize()
+        if ( self.renderWindowSize == None ) or ( self.renderWindowSize[1] <> window_size[1] ) or ( self.renderWindowSize[0] <> window_size[0] ):
+            self.renderWindowSize = window_size
+            self.onRenderWindowResize()
+            
+    def onRenderWindowResize( self ):
+        self.repositionButtons()
+        self.render()
 
     def clearReferrents(self):
         self.removeObservers()
