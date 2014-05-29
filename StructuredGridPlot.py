@@ -566,7 +566,7 @@ class StructuredGridPlot(DV3DPlot):
         self.variable_reader.execute( )       
         self.execute( )
         self.initializePlots()
-        self.showConfigureButton()
+#        self.showConfigureButton()
         self.start()
 #        if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
         
@@ -576,16 +576,13 @@ class StructuredGridPlot(DV3DPlot):
     def onResizeEvent(self):
         self.updateTextDisplay( None, True )
         
-    def updateTextDisplay( self, text, render=False ):
+    def updateTextDisplay( self, text=None, render=False ):
         if text <> None:
             metadata = self.getMetadata()
             var_name = metadata.get( 'var_name', '')
             var_units = metadata.get( 'var_units', '')
             self.labelBuff = "%s (%s)\n%s" % ( var_name, var_units, str(text) )
-        label_actor = self.getLabelActor()
-        if label_actor: label_actor.VisibilityOn() 
-        if render: self.render()     
-
+        DV3DPlot.updateTextDisplay( self, None, render )
             
     def toggleClipping(self):
         if self.clipper.GetEnabled():   self.clipOff()

@@ -313,8 +313,7 @@ class RectGridPlot(StructuredGridPlot):
             value = args[2].GetValue()
             plane_widget.SetSlicePosition( value )
             slicePosition.setValues( [ value ] )
-            if config_function.key == 'z':
-                self.ProcessIPWAction( plane_widget, ImagePlaneWidget.InteractionUpdateEvent, action = ImagePlaneWidget.Pushing )
+            self.ProcessIPWAction( plane_widget, ImagePlaneWidget.InteractionUpdateEvent, action = ImagePlaneWidget.Pushing )
 
  
     def resetCamera(self):
@@ -1478,19 +1477,19 @@ class RectGridPlot(StructuredGridPlot):
                             pos1 = [ pos[0], pos[1], origin[2] ]
                             polys.SetPosition( pos1 )
             
-                if self.generateContours:
-                    slice_data = caller.GetReslice2Output()
-                    if slice_data:
-                        slice_data.Update()    
-                        iextent =  slice_data.GetExtent()            
-                        ispacing =  slice_data.GetSpacing()            
-                        self.contours.SetInput( slice_data )
-                        self.contours.Modified()
-                        origin = caller.GetOrigin()
-                        contourLineActor = self.getContourActor( iAxis )
-                        contourLineActor.SetPosition( origin[0], origin[1], origin[2] )
-        #                contourLineActor.SetOrigin( origin[0], origin[1], origin[2] )
-                        self.setVisibleContour( iAxis )
+                    if self.generateContours:
+                        slice_data = caller.GetReslice2Output()
+                        if slice_data:
+                            slice_data.Update()    
+                            iextent =  slice_data.GetExtent()            
+                            ispacing =  slice_data.GetSpacing()            
+                            self.contours.SetInput( slice_data )
+                            self.contours.Modified()
+                            origin = caller.GetOrigin()
+                            contourLineActor = self.getContourActor( iAxis )
+                            contourLineActor.SetPosition( origin[0], origin[1], origin[2] )
+            #                contourLineActor.SetOrigin( origin[0], origin[1], origin[2] )
+                            self.setVisibleContour( iAxis )
 #                print " Generate Contours, data dims = %s, origin = %s, pos = %s, extent = %s" % ( str( slice_data.GetDimensions() ), str(slice_data.GetOrigin()), str(origin), str(slice_data.GetExtent()) )
                 
             self.render()

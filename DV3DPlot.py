@@ -5,6 +5,7 @@ Created on Apr 30, 2014
 '''
 from ColorMapManager import *
 from ConfigurationFunctions import *
+from ButtonBarWidget import *
 import vtk, traceback
 MIN_LINE_LEN = 50
 VTK_NOTATION_SIZE = 10
@@ -59,7 +60,7 @@ class TextDisplayMgr:
     def createTextActor( self, aid, **args ):
         textActor = vtk.vtkTextActor()  
         textActor.SetTextScaleMode( vtk.vtkTextActor.TEXT_SCALE_MODE_PROP )  
-        textActor.SetMaximumLineHeight( 0.1 )       
+        textActor.SetMaximumLineHeight( 0.05 )       
         textprop = textActor.GetTextProperty()
         textprop.SetColor( *args.get( 'color', ( VTK_FOREGROUND_COLOR[0], VTK_FOREGROUND_COLOR[1], VTK_FOREGROUND_COLOR[2] ) ) )
         textprop.SetOpacity ( args.get( 'opacity', 1.0 ) )
@@ -111,6 +112,8 @@ class DV3DPlot():
         self.process_mode = ProcessMode.Default
         self.slider_postions = [ [ [ 0.25, 0.75 ] ], [ [0.01,0.48], [0.52, 0.99 ] ], [ [0.01,0.3], [0.35,0.7], [0.75, 0.99 ] ], [ [0.01,0.24], [0.26,0.49], [0.51,0.74], [0.76, 0.99 ] ]    ]
         self.slicePlanesVisible = [ True, False, False, False ]
+        self.button_bars = {}
+        self.gui_visibility = 0
         
         self.configuring = False
         self.configurableFunctions = {}
@@ -152,45 +155,10 @@ class DV3DPlot():
 
     def processVerticalScalingCommand( self, args, config_function ):
         pass 
-
-#     def get3DButtonRepresentation(self, **args):
-#         buttonRepresentation = vtk.vtkProp3DButtonRepresentation() 
-#         buttonRepresentation.FollowCameraOn()
-#         buttonRepresentation.SetNumberOfStates(1)
-#         button_text = args.get( 'text', 'button test' )
-#         button_position = args.get( 'position', [ 0, 0, 0 ] )
-#         button_scale = args.get( 'scale', [ 0.2, 0.2, 0.2 ] )
-#         button_id = args.get( 'id', button_text )
-#         atext = vtk.vtkVectorText()
-#         atext.SetText( button_text )
-#         textMapper = vtk.vtkPolyDataMapper()
-#         textMapper.SetInputConnection(atext.GetOutputPort())
-#         textActor = vtk.vtkFollower()
-#         textActor.SetMapper(textMapper)
-#         textActor.SetScale( button_scale  )
-#         textActor.AddPosition( button_position )
-#         buttonRepresentation.SetButtonProp( 0, textActor ) 
-#         renderer = self.getRenderer()
-#         renderer.AddActor( textActor )
-#         return button_id, buttonRepresentation
-    
+   
     def getRenderer(self):
         return self.renderWindow.GetRenderers().GetFirstRenderer ()
         
-       
-#     def getButton( self, **args ):
-#         button_id, buttonRepresentation = self.get3DButtonRepresentation( **args )
-#         buttonWidget = vtk.vtkButtonWidget()
-#         buttonWidget.SetInteractor( self.renderWindowInteractor )
-#         position = args.get( 'position', [ 1.0, 1.0 ] )
-#         size = args.get( 'size', [ 100.0, 20.0 ] )
-#         buttonRepresentation.PlaceWidget( self.computeBounds(position,size) )
-#         buttonWidget.SetRepresentation(buttonRepresentation)
-#         buttonWidget.AddObserver( 'StateChangedEvent', self.processStateChangeEvent )
-#         self.buttons[ buttonWidget ] = [ button_id, position, size ]
-#         return buttonWidget       
-
-
     def processChooseColormapCommand( self, args, config_function ):
         from ListWidget import ColorbarListWidget
         colormapParam = config_function.value
@@ -215,14 +183,20 @@ class DV3DPlot():
             colormapParam.setValues( cmap_data  )
             
     def repositionButtons(self):
-        for button_item in self.buttons.items():
-            button = button_item[0]
-            [ button_id, position, size ] = button_item[1]
-            brep = button.GetRepresentation()
-            brep.PlaceWidget( self.computeBounds(position,size) )
-            brep.Modified()
-            button.Modified()
-                     
+        self.updateGuiVisibility()
+        for button_bar in self.button_bars.values():
+            button_bar.reposition()
+ 
+    def toggleGuiVisibility(self):
+        self.gui_visibility = ( self.gui_visibility + 1 ) % 3
+        self.updateGuiVisibility()
+        self.render()
+
+    def updateGuiVisibility(self):
+        for button_bar in self.button_bars.values(): button_bar.hide()
+        if self.gui_visibility == 0:  self.showConfigurationButton()
+        if self.gui_visibility == 1:  self.showPlotButtons()
+                                          
     def setSliderValue(self, index, value ):
         ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
         if swidget:
@@ -450,7 +424,7 @@ class DV3DPlot():
                     if textDisplay <> None:  self.updateTextDisplay( textDisplay )
                     self.render()
 
-    def updateTextDisplay( self, text, render=False ):
+    def updateTextDisplay( self, text=None, render=False ):
         if text <> None:
             self.labelBuff = "%s" % str(text) 
         label_actor = self.getLabelActor()
@@ -461,7 +435,7 @@ class DV3DPlot():
         return self.labelBuff   
 
     def getLabelActor(self):
-        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.01, .90), bold = False  ) if self.textDisplayMgr else None
+        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.25, .95), bold = False  ) if self.textDisplayMgr else None
     
     def UpdateCamera(self):
         pass
@@ -641,14 +615,42 @@ class DV3DPlot():
             self.updateInteractor() 
             self.activated = True 
             
+    def showConfigurationButton(self):
+        bbar_name = 'Configure'
+        bbar = self.button_bars.get( bbar_name, None )
+        if bbar == None:
+            bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
+            config_button = bbar.addButton( names=['Configure'], id='Configure', key='g', nstates = 3 )
+#            config_button.StateChangedSignal.connect( self.togglePlotButtons )
+            bbar.build()
+            self.button_bars[ bbar_name ] = bbar
+        bbar.show()
+
+    def showPlotButtons(self):
+        bbar_name = 'Plot'
+        bbar = self.button_bars.get( bbar_name, None )
+        if bbar == None:
+            bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
+            bbar.addButton( names=['ToggleSlicePlot'],  key='p' )
+            bbar.addButton( names=['XSlider'],  key='x' )
+            bbar.addButton( names=['YSlider'],  key='y' )
+            bbar.addButton( names=['ZSlider'],  key='z' )
+            bbar.addButton( names=['ToggleSurfacePlot'],  key='s' )
+            bbar.addButton( names=['ToggleVolumePlot'], key='v' )
+            bbar.build()
+            self.button_bars[ bbar_name ] = bbar
+        bbar.show()
+       
     def onWindowModified( self, caller, event ):
         renwin = caller
         window_size = renwin.GetSize()
         if ( self.renderWindowSize == None ) or ( self.renderWindowSize[1] <> window_size[1] ) or ( self.renderWindowSize[0] <> window_size[0] ):
+            if self.renderWindowSize <> None: 
+                self.onRenderWindowResize()
             self.renderWindowSize = window_size
-            self.onRenderWindowResize()
             
     def onRenderWindowResize( self ):
+        self.updateTextDisplay()
         self.repositionButtons()
         self.render()
 
@@ -691,12 +693,23 @@ class DV3DPlot():
         keysym =  eventArgs[1]            
         if keysym   == "i":  self.clearInteractions()
         elif keysym == "b":  self.toggleColorbarVisibility()
+        elif keysym == "g":  self.toggleGuiVisibility()
 #        elif keysym == "2":  self.enableDualInputs()
         else: return False
         return True
     
     def enableDualInputs(self):
         pass
+    
+    def displayButtonBar(self):
+        return
+        self.buttonBarWidget = ButtonBarWidget( self.renderWindowInteractor )
+        self.buttonBarWidget.addButton( names=['ScaleColormap'], id='Scale Colormap', key='S' )
+        self.buttonBarWidget.addButton( names=['Configure'], id='Configure', key='C' )
+        self.buttonBarWidget.build()
+        self.buttonBarWidget.show()
+        self.render()
+
 
     def getLUT( self, cmap_index=0  ):
         colormapManager = self.getColormapManager( index=cmap_index )
