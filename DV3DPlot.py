@@ -31,6 +31,7 @@ class TextDisplayMgr:
         textActor.GetPosition2Coordinate().SetValue( vpos[0] + size[0], vpos[1] + size[1] )      
   
     def getTextActor( self, aid, text, pos, **args ):
+        if text == None: return
         textActor = self.getProp( 'vtkTextActor', aid  )
         if textActor == None:
             textActor = self.createTextActor( aid, **args  )
@@ -353,13 +354,14 @@ class DV3DPlot():
         alt = ( keysym <> None) and keysym.startswith("Alt")
         if alt:
             self.isAltMode = True
-        else: 
+        else:                
             self.processKeyEvent( key, caller, event )
         return 0
 
     def processKeyEvent( self, key, caller=None, event=None, **args ):
         keysym = caller.GetKeySym() if caller else key
-        if self.onKeyEvent( [ key, keysym ] ):
+        ctrl = caller.GetControlKey() if caller else args.get( 'ctrl', 0 )
+        if self.onKeyEvent( [ key, keysym, ctrl ] ):
             pass
         else:
             ( state, persisted ) =  self.getInteractionState( key )
@@ -368,6 +370,9 @@ class DV3DPlot():
                 print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
                 self.updateInteractionState( state, **args  )                 
                 self.isAltMode = False 
+                
+        for button_bar in self.button_bars.values():
+            button_bar.processKeyEvent( keysym, ctrl )
         return 0
 
     def onLeftButtonPress( self, caller, event ):
@@ -435,7 +440,7 @@ class DV3DPlot():
         return self.labelBuff   
 
     def getLabelActor(self):
-        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.25, .95), bold = False  ) if self.textDisplayMgr else None
+        return self.textDisplayMgr.getTextActor( 'label', self.labelBuff, (.18, .95), bold = False  ) if self.textDisplayMgr else None
     
     def UpdateCamera(self):
         pass
@@ -630,13 +635,16 @@ class DV3DPlot():
         bbar_name = 'Plot'
         bbar = self.button_bars.get( bbar_name, None )
         if bbar == None:
-            bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
-            bbar.addButton( names=['ToggleSlicePlot'],  key='p' )
-            bbar.addButton( names=['XSlider'],  key='x' )
-            bbar.addButton( names=['YSlider'],  key='y' )
-            bbar.addButton( names=['ZSlider'],  key='z' )
-            bbar.addButton( names=['ToggleSurfacePlot'],  key='s' )
-            bbar.addButton( names=['ToggleVolumePlot'], key='v' )
+            b = bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
+            b = bbar.addButton( names=['ToggleSlicePlot'],  key='p' )
+            b = bbar.addButton( names=['XSlider'],  key='x', toggle=True, state=1 )
+            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+            b = bbar.addButton( names=['YSlider'],  key='y', toggle=True )
+            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+            b = bbar.addButton( names=['ZSlider'],  key='z', toggle=True )
+            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+            b = bbar.addButton( names=['ToggleSurfacePlot'],  key='s', toggle=True )
+            b = bbar.addButton( names=['ToggleVolumePlot'], key='v', toggle=True )
             bbar.build()
             self.button_bars[ bbar_name ] = bbar
         bbar.show()

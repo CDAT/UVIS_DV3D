@@ -977,17 +977,19 @@ class RectGridPlot(StructuredGridPlot):
         else: 
             self.levelSetActor.VisibilityOn()
         self.render()
+        
+    def invokeKeyEvent(self, key, ctrl=0 ):
+        self.renderWindowInteractor.SetKeyEventInformation( ctrl, 0, key, 1, key )
+        self.renderWindowInteractor.InvokeEvent( 'CharEvent' )
 
     def toggleSliceVisibility( self ):
+        self.processKeyEvent( 'W', ctrl=1 )
         self.activeSliceIndex =  ( self.activeSliceIndex + 1 ) % 3
         for iSlice in range( 3 ):
             slice = "xyz"[iSlice]
             if iSlice ==  self.activeSliceIndex: 
                 plane_index, plane_widget = self.getPlaneWidget( slice )
                 self.processKeyEvent( slice, None, None, enable=True  )
-            else: 
-                self.releaseSlider( iSlice )
-                self.modifySlicePlaneVisibility( iSlice, slice, False )  
         self.render() 
                     
     def EventWatcher( self, caller, event ): 
@@ -997,11 +999,19 @@ class RectGridPlot(StructuredGridPlot):
 
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
-        if (  key == 'v'  ):      self.toggleVolumeVisibility()              
-        elif (  key == 'p'  ):    self.toggleSliceVisibility() 
-        elif (  key == 's'  ):    self.toggleIsosurfaceVisibility()             
+        ctrl = eventArgs[2]
+        if   (  ( key == 'v' ) and not ctrl    ):   self.toggleVolumeVisibility()              
+        elif (  ( key == 'p' ) and not ctrl    ):   self.toggleSliceVisibility() 
+        elif (  ( key == 's' ) and not ctrl    ):   self.toggleIsosurfaceVisibility() 
+        elif (  ( key == 'W' ) and ctrl        ):   self.releaseSliders()               
         else:                   return StructuredGridPlot.onKeyEvent( self, eventArgs )
         return 1 
+    
+    def releaseSliders(self):
+        for iSlice in range( 4 ):
+            self.releaseSlider( iSlice )
+            if iSlice < 3: 
+                self.modifySlicePlaneVisibility( iSlice, "xyz"[iSlice], False )  
     
     def showConfigureButton(self):                                                                                      
         config_button = self.getButton( names=['Configure'] ) # names=['ScaleColormap'] ) Configure

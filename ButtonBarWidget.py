@@ -4,7 +4,7 @@ Created on May 28, 2014
 @author: tpmaxwel
 '''
 
-import vtk, os
+import vtk, os, sys
 import numpy as np
 from ConfigurationFunctions import SIGNAL
 
@@ -23,23 +23,48 @@ class Orientation:
     Vertical = 1 
     
 class Button:
+    
+    FuncToggleStateOn = 1
+    FuncToggleStateOff = 2
         
     def __init__( self, iren, **args ):
         self.StateChangedSignal = SIGNAL('StateChanged')
+        self.invokingEvent = False
         self.renderWindowInteractor = iren
         self.names = args.get( 'names', [] )
-        self.state = 0
-        self.numberOfStates = args.get( 'nstates', len( self.names ) )
+        self.state = args.get( 'state', 0 )
+        self.toggle = args.get( 'toggle', False )
+        self.numberOfStates = args.get( 'nstates', ( 2 if self.toggle else len( self.names ) ) )
         self.id = args.get( 'id', self.names[0] if self.numberOfStates else None )
         self.key = args.get( 'key', None )
         self.image_size = None
         self.button_files = [ ]
+        self.functionKeys = { }
         self.createButtonRepresentation()
         self.buttonWidget = vtk.vtkButtonWidget()
         self.buttonWidget.SetInteractor(self.renderWindowInteractor)
         self.buttonWidget.SetRepresentation( self.buttonRepresentation )
         self.buttonWidget.AddObserver( 'StateChangedEvent', self.processStateChangeEvent )
+        self.buttonRepresentation.Highlight( self.state )
+        
+    def getFunctionMapKey (self, key, ctrl ):
+        return "c-%c" % key if ctrl else "%c" % key
 
+    def addFunctionKey(self, key, ctrl, function ):
+        fkey =  self.getFunctionMapKey( key, ctrl )       
+        self.functionKeys[ fkey ]  = function
+        
+    def processFunctionKey( self, key, ctrl ):
+        fkey =  self.getFunctionMapKey( key, ctrl )       
+        function = self.functionKeys.get( fkey, None )
+        if function <> None: 
+            self.executeFunction( function )
+            return 1
+        return 0
+    
+    def executeFunction( self, function ):
+        if   function == Button.FuncToggleStateOn:  self.setToggleState( 1 )
+        elif function == Button.FuncToggleStateOff: self.setToggleState( 0 )
     
     def createButtonRepresentation(self, **args):
         JPEGReader = vtk.vtkJPEGReader()
@@ -56,17 +81,47 @@ class Button:
                 if self.image_size == None: self.image_size = image_data.GetDimensions()
                 self.buttonRepresentation.SetButtonTexture( button_index, image_data )
                 self.button_files.append( buttonFilePath )
-                
+            self.setToggleProps()
+        
     def addObserver(self, observer, **args ):
         event = args.get( 'event', 'StateChangedEvent' )
         self.buttonWidget.AddObserver( event, observer )
+        
+    def setToggleProps(self, state = None ):
+        if self.toggle:
+            prop = self.buttonRepresentation.GetProperty()
+            prop.SetOpacity( 0.4 if ( self.state == 0 ) else 1.0 )
+            self.buttonRepresentation.SetProperty(prop)
+            prop = self.buttonRepresentation.GetHoveringProperty()
+            prop.SetOpacity( 0.7 if ( self.state == 0 ) else 1.0 )
+            self.buttonRepresentation.SetHoveringProperty(prop)
+            self.buttonRepresentation.Modified()
+            self.buttonRepresentation.NeedToRenderOn()
+            
+    def processKeyEvent( self, key, ctrl = 0 ):
+        if self.processFunctionKey( key, ctrl ): 
+            return True        
+        if key == self.key and not self.invokingEvent:
+            self.buttonRepresentation.Highlight( self.buttonRepresentation.HighlightSelecting )
+            self.processStateChangeEvent( self, "KeyEvent", True )
+            self.buttonRepresentation.Highlight( self.buttonRepresentation.HighlightNormal )
+            return True
+        return False
+    
+    def setToggleState( self, state ):
+        self.state = state
+        self.setToggleProps()       
 
-    def processStateChangeEvent( self, obj, event ):
-        self.state = ( self.state + 1  ) % self.numberOfStates
+    def processStateChangeEvent( self, obj, event, indirect = False ):
+        self.invokingEvent = True
+        self.state = ( self.state + 1 ) % self.numberOfStates
         self.StateChangedSignal( self.id, self.key, self.state )
-        if self.key <> None:
+        if (self.key <> None) and not indirect:
             self.renderWindowInteractor.SetKeyEventInformation( 0, 0, self.key, 1, self.key )
             self.renderWindowInteractor.InvokeEvent( 'CharEvent' )
+        self.setToggleProps()
+        self.invokingEvent = False
+            
         print " ** Process State Change Event: id = %s, state = %d " % ( self.id, self.state )
         
     def place( self, bounds ):
@@ -93,8 +148,13 @@ class ButtonBarWidget:
         self.orientation = args.get( 'orientation', Orientation.Vertical )
         self.position = args.get( 'position', ( 0.0, 1.0 ) )
         self.buffer = args.get( 'buffer', ( 3, 3 ) )
+        self.windowSizeRange = [ 200, 1200 ]
+        self.minScale = 0.3
         self.buttons = []
         self.visible = False
+        self.updateWindowSize()
+        
+    def updateWindowSize(self):
         self.windowSize = self.interactor.GetRenderWindow().GetSize()
         
     def build( self, **args ):
@@ -103,10 +163,14 @@ class ButtonBarWidget:
             current_location = self.placeButton( button, current_location )
             
     def reposition( self, **args ):
+        print "Reposition: %d " % self.windowSize[0]
+        self.updateWindowSize()
         self.build( **args )
              
     def placeButton( self, button, position, **args ):
-        size = button.size()
+        max_size = button.size()
+        scale = 1.0 if self.windowSize[0] > self.windowSizeRange[1] else float(self.windowSize[0])/self.windowSizeRange[1]
+        size = [ max_size[0]*scale, max_size[1]*scale ]
         bounds = self.computeBounds( position, size )
         print " placeButton[%s]: bounds = %s" % ( button.id, str(bounds) )
         button.place( bounds )
@@ -155,6 +219,13 @@ class ButtonBarWidget:
         print "Show button bar ", self.name
         self.visible = True
         for button in self.buttons: button.On()
+        
+    def processKeyEvent( self, key, ctrl = 0 ):
+        processed = False
+        for button in self.buttons: 
+            if button.processKeyEvent( key, ctrl ): 
+                processed = True
+        return processed
  
     def hide(self):
         print "Hide button bar ", self.name
