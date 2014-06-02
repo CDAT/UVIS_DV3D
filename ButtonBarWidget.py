@@ -6,11 +6,13 @@ Created on May 28, 2014
 
 import vtk, os, sys
 import numpy as np
-from ConfigurationFunctions import SIGNAL
+from ConfigurationFunctions import *
 
 PackagePath = os.path.dirname( __file__ )  
 DataDir = os.path.join( PackagePath, 'data' )
 ButtonDir = os.path.join( DataDir, 'buttons' )
+
+NavigationInteractorStyle = vtk.vtkInteractorStyleTrackballCamera()  
 
 class OriginPosition:
     Upper_Left = [ 0, 1 ] 
@@ -21,7 +23,15 @@ class OriginPosition:
 class Orientation:
     Horizontal = 0 
     Vertical = 1 
-    
+
+class ProcessMode:
+    Default = 0
+    Slicing = 1
+    Thresholding = 2
+    LowRes = 0
+    HighRes = 1
+    AnyRes = 2
+        
 class Button:
     
     FuncToggleStateOn = 1
@@ -110,6 +120,7 @@ class Button:
     
     def setToggleState( self, state ):
         self.state = state
+        if state == 0: print "Toggle '%s' off" % self.id
         self.setToggleProps()       
 
     def processStateChangeEvent( self, obj, event, indirect = False ):
@@ -142,7 +153,14 @@ class ButtonBarWidget:
         self.vtk_coord = vtk.vtkCoordinate()
         self.vtk_coord.SetCoordinateSystemToNormalizedDisplay()
         self.StateChangedSignal = SIGNAL('StateChanged')
+        self.process_mode = ProcessMode.Default
+        self.current_configuration_mode = None
+        self.currentSliders = {}
+        self.slider_postions = [ [ [ 0.25, 0.75 ] ], [ [0.01,0.48], [0.52, 0.99 ] ], [ [0.01,0.3], [0.35,0.7], [0.75, 0.99 ] ], [ [0.01,0.24], [0.26,0.49], [0.51,0.74], [0.76, 0.99 ] ]    ]
+        self.slicePlanesVisible = [ True, False, False, False ]
         self.interactor = interactor
+        self.InteractionState = None
+        self.LastInteractionState = None
         self.name = name 
         self.origin = args.get( 'origin', OriginPosition.Upper_Left )
         self.orientation = args.get( 'orientation', Orientation.Vertical )
@@ -152,11 +170,15 @@ class ButtonBarWidget:
         self.minScale = 0.3
         self.buttons = []
         self.visible = False
+        self.configurableFunctions = {}
         self.updateWindowSize()
         
     def updateWindowSize(self):
         self.windowSize = self.interactor.GetRenderWindow().GetSize()
         
+    def render( self ):
+        self.interactor.GetRenderWindow().Render()
+       
     def build( self, **args ):
         current_location = self.getScreenPosition( self.position )
         for button in self.buttons:
@@ -206,6 +228,7 @@ class ButtonBarWidget:
             
     def processStateChangeEvent( self, button_id, key, state ):
         self.StateChangedSignal( button_id, key, state )
+#        button = self.buttons.get( button_id, None )
 
     def computeBounds( self, pos, size ):
         bds = [0.0]*6
@@ -238,10 +261,297 @@ class ButtonBarWidget:
         else:
             self.updatePositions() 
             self.show()
+
+    def addSliderButton( self, **args ):
+        button = self.addButton( **args )
+        self.addConfigurableSliderFunction( button.id, **args)
+        return button
+        
+    def addConfigButton( self, **args ):
+        button = self.addButton( **args )
+        self.addConfigurableFunction( button.id, **args)
+        return button
             
     def getRenderer(self):
         rw = self.interactor.GetRenderWindow()
         return rw.GetRenderers().GetFirstRenderer ()
+
+    def addConfigurableFunction(self, name, **args):
+        self.configurableFunctions[name] = ConfigurableFunction( name, **args )
+
+    def addConfigurableSliderFunction(self, name, **args):
+        self.configurableFunctions[name] = ConfigurableSliderFunction( name, **args )
+
+    def getConfigFunction( self, name ):
+        return self.configurableFunctions.get(name,None)
+
+    def removeConfigurableFunction(self, name ):        
+        del self.configurableFunctions[name]
+
+    def applyConfiguration(self, **args ):       
+        for configFunct in self.configurableFunctions.values():
+            configFunct.applyParameter( **args  )
+
+    def updateSliderWidgets(self, value0, value1 ): 
+        for index, value in enumerate( ( value0, value1 ) ):
+            if value <> None: self.setSliderValue( index, value )
+
+    def setSliderValue(self, index, value ):
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
+        if swidget:
+            srep = swidget.GetRepresentation( )   
+            srep.SetValue( value  )
+            
+    def createSliderWidget( self, index ): 
+        sliderRep = vtk.vtkSliderRepresentation2D()
+            
+        sliderRep.GetPoint1Coordinate().SetCoordinateSystemToNormalizedDisplay()
+        sliderRep.GetPoint2Coordinate().SetCoordinateSystemToNormalizedDisplay()
+        prop = sliderRep.GetSliderProperty()
+        prop.SetColor( 1.0, 0.0, 0.0 )
+        prop.SetOpacity( 0.5 )
+        sprop = sliderRep.GetSelectedProperty()
+        sprop.SetOpacity( 0.8 )           
+        tprop = sliderRep.GetTubeProperty()
+        tprop.SetColor( 0.5, 0.5, 0.5 )
+        tprop.SetOpacity( 0.5 )
+        cprop = sliderRep.GetCapProperty()
+        cprop.SetColor( 0.0, 0.0, 1.0 )
+        cprop.SetOpacity( 0.5 )
+#        sliderRep.PlaceWidget(  bounds   )  
+        sliderRep.SetSliderLength(0.05)
+        sliderRep.SetSliderWidth(0.02)
+        sliderRep.SetTubeWidth(0.01)
+        sliderRep.SetEndCapLength(0.02)
+        sliderRep.SetEndCapWidth(0.02)
+        sliderRep.SetTitleHeight( 0.02 )    
+        sliderWidget = vtk.vtkSliderWidget()
+        sliderWidget.SetInteractor(self.interactor)
+        sliderWidget.SetRepresentation( sliderRep )
+        sliderWidget.SetAnimationModeToAnimate()
+        sliderWidget.EnabledOn()
+        sliderWidget.AddObserver("StartInteractionEvent", self.processStartInteractionEvent )
+        sliderWidget.AddObserver("EndInteractionEvent", self.processEndInteractionEvent )
+        sliderWidget.AddObserver("InteractionEvent", self.processInteractionEvent )
+        sliderWidget.KeyPressActivationOff()
+        return sliderWidget
+    
+    def positionSliders( self, nsliders ): 
+        for islider in range( nsliders ):
+            self.positionSlider( islider, nsliders )
+            
+    def releaseSliders( self ):
+        for index in range(4): 
+            self.releaseSlider( index )            
+            
+    def positionSlider(self, position_index, n_sliders ):
+        slider_pos = self.slider_postions[ n_sliders ]
+        ( process_mode, interaction_state, swidget ) = self.currentSliders[position_index]
+        sliderRep = swidget.GetRepresentation( ) 
+        sliderRep.GetPoint1Coordinate().SetValue( slider_pos[position_index][0], 0.06, 0 )  
+        sliderRep.GetPoint2Coordinate().SetValue( slider_pos[position_index][1], 0.06, 0 )
+        sliderRep.Modified()
+        swidget.Modified()    
+        sliderRep.NeedToRenderOn()
+                        
+    def commandeerSlider(self, index, label, bounds, value ): 
+        widget_item = self.currentSliders.get( index, None )
+        if widget_item == None: 
+            swidget = self.createSliderWidget(index) 
+        else:
+            ( process_mode, interaction_state, swidget ) = widget_item 
+        srep = swidget.GetRepresentation( )      
+        srep.SetTitleText( label )    
+        srep.SetMinimumValue( bounds[ 0 ] )
+        srep.SetMaximumValue( bounds[ 1 ]  )
+        srep.SetValue( value )
+        swidget.SetEnabled( 1 ) 
+        self.currentSliders[index] = ( self.process_mode, self.InteractionState, swidget )
+        
+    def releaseSlider( self, index ):        
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
+        if swidget: swidget.SetEnabled( 0 ) 
+
+    def getSliderEnabled( self, index ):        
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
+        if swidget: return swidget.GetEnabled() 
+        return False
+        
+    def clearInteractions(self):
+        if self.InteractionState <> None: 
+            configFunct = self.configurableFunctions[ self.InteractionState ]
+            configFunct.close()   
+        self.process_mode = ProcessMode.Default
+        self.InteractionState = None
+        for ( process_mode, interaction_state, swidget ) in self.currentSliders.values():
+            swidget.SetEnabled( 0 ) 
+        self.render()
+
+    def processInteractionEvent( self, obj=None, event=[] ):
+#        print " processInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            srep = obj.GetRepresentation( ) 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "UpdateConfig", self.getSliderIndex(obj), srep, event  ] )                         
+#         else:
+#             if self.process_mode == ProcessMode.Slicing:
+#                 ( process_mode, interaction_state, swidget ) = self.currentSliders[1] 
+#                 slice_pos = swidget.GetRepresentation( ).GetValue()
+#                 self.pushSlice( slice_pos )         
+
+    def processStartInteractionEvent( self, obj, event ): 
+        slider_index = self.checkInteractionState( obj, event ) 
+#        print " processStartInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "StartConfig", slider_index ] )  
+#         else:   
+#             if self.process_mode == ProcessMode.Slicing:
+#                 self.setRenderMode( ProcessMode.LowRes )
+                
+    def checkInteractionState( self, obj, event ):
+        for item in self.currentSliders.items():
+            ( process_mode, interaction_state, swidget ) = item[1]
+            if ( id( swidget ) == id( obj ) ): 
+                if self.InteractionState <> interaction_state:            
+                    self.processEndInteractionEvent( obj, event )
+                    if self.InteractionState <> None: self.endInteraction()
+                    self.InteractionState = interaction_state
+                    self.process_mode = process_mode
+                    print "Change Interaction State: %s %d " % ( self.InteractionState, self.process_mode )
+                return item[0]
+        return None
+            
+    def getSliderIndex(self, obj ):
+        for index in self.currentSliders:
+            ( process_mode, interaction_state, swidget ) = self.currentSliders[index]
+            if ( id( swidget ) == id( obj ) ): return index
+        return None
+
+    def processEndInteractionEvent( self, obj, event ):  
+#        print " processEndInteractionEvent: ( %s %d )" % ( self.InteractionState, self.process_mode )
+        if ( self.InteractionState <> None ): 
+            config_function = self.getConfigFunction( self.InteractionState )
+            config_function.processInteractionEvent( [ "EndConfig" ] )  
+
+    def startConfiguration( self, x, y, config_types ): 
+        if (self.InteractionState <> None) and not self.configuring:
+            configFunct = self.configurableFunctions[ self.InteractionState ]
+            if configFunct.type in config_types:
+                self.configuring = True
+                configFunct.start( self.InteractionState, x, y )
+                self.haltNavigationInteraction()
+#                if (configFunct.type == 'leveling'): self.getLabelActor().VisibilityOn()
+
+    def haltNavigationInteraction(self):
+        pass
+#        print " ---------------------- haltNavigationInteraction -------------------------- "
+        if self.interactor:
+            self.interactor.SetInteractorStyle( self.configurationInteractorStyle )  
+    
+    def resetNavigation(self):
+        pass
+#         print " ---------------------- resetNavigation -------------------------- "
+        if self.interactor:
+            self.interactor.SetInteractorStyle( NavigationInteractorStyle )
+            self.enableVisualizationInteraction()
+
+    def getInteractionState( self, key ):
+        for configFunct in self.configurableFunctions.values():
+            if configFunct.matches( key ): return ( configFunct.name, configFunct.persisted, self )
+        return ( None, None, None )    
+
+    def updateInteractionState( self, state, **args ):    
+        rcf = None
+        if state == None: 
+            self.finalizeLeveling()
+            self.endInteraction()   
+        else:            
+            if self.InteractionState <> None: 
+                configFunct = self.configurableFunctions[ self.InteractionState ]
+                if configFunct.name <> state:
+                    configFunct.close()                 
+            configFunct = self.configurableFunctions.get( state, None )
+            if configFunct and ( configFunct.type <> 'generic' ): 
+                rcf = configFunct
+#                print " UpdateInteractionState, state = %s, cf = %s " % ( state, str(configFunct) )
+            if not configFunct and self.acceptsGenericConfigs:
+                configFunct = ConfigurableFunction( state, None, None )              
+                self.configurableFunctions[ state ] = configFunct
+            if configFunct:
+                if configFunct.type <> 'slider': 
+                    self.releaseSliders() 
+                configFunct.open( state )
+                self.InteractionState = state                   
+                self.LastInteractionState = self.InteractionState
+                self.disableVisualizationInteraction()               
+                configFunct.processInteractionEvent( [ "InitConfig" ] )
+                
+                if (configFunct.type == 'slider'):
+                    force_enable = args.get( 'enable', False )
+#                    self.slicePlanesVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
+                    self.current_configuration_mode = configFunct.label
+                    tvals = configFunct.value.getValues()
+                    if configFunct.position <> None:
+                        n_active_sliders = configFunct.position[1]
+                        position_index = configFunct.position[0]
+                        if self.slicePlanesVisible[ position_index ] or force_enable:
+                            self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.getRangeBounds(), tvals[0]  )
+                            self.positionSlider( position_index, n_active_sliders )
+                            self.slicePlanesVisible[ position_index ] = True
+                        else: self.releaseSlider( position_index )
+                    else:
+                        n_active_sliders = len( configFunct.sliderLabels )
+                        for slider_index in range(4):
+                            if self.slicePlanesVisible[ slider_index ]:
+                                self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.getRangeBounds(), tvals[slider_index]  )
+                                self.positionSlider( slider_index, n_active_sliders )
+                            else:
+                                self.releaseSlider( slider_index )
+                    configFunct.processInteractionEvent( [ "ProcessSliderInit" ] )
+                self.render()
+
+            elif state == 'colorbar':
+                self.toggleColorbarVisibility()                        
+            elif state == 'reset':
+                self.resetCamera()              
+                if  len(self.persistedParameters):
+                    pname = self.persistedParameters.pop()
+                    configFunct = self.configurableFunctions[pname]
+                    param_value = configFunct.reset() 
+                    if param_value: self.persistParameterList( [ (configFunct.name, param_value), ], update=True, list=False )                                      
+        return rcf
+
+    def enableVisualizationInteraction(self): 
+        pass
+
+    def disableVisualizationInteraction(self):
+        pass
+    
+    def printInteractionStyle(self, msg ):
+        print "%s: InteractionStyle = %s " % ( msg,  self.renderWindow.GetInteractor().GetInteractorStyle().__class__.__name__ ) 
+
+    def finalizeConfigurationObserver( self, parameter_name, **args ):
+        self.finalizeParameter( parameter_name, **args )
+        self.endConfiguration()    
+#        for parameter_name in self.getModuleParameters(): self.finalizeParameter( parameter_name, *args ) 
+        self.endInteraction( **args ) 
+
+    def finalizeParameter(self, parameter_name, **args ):
+        pass
+    
+    def endInteraction( self, **args ):  
+        self.resetNavigation() 
+        self.configuring = False
+        self.InteractionState = None
+        self.enableVisualizationInteraction()
+
+    def endConfiguration( self ):
+        pass
+           
+    def initializeConfiguration( self, **args ):
+        for configFunct in self.configurableFunctions.values():
+            configFunct.init( **args )
 
 if __name__ == '__main__':
         

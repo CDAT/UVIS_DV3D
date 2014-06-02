@@ -430,12 +430,10 @@ class ImagePlaneWidget:
         if self.NavigationInteractorStyle == None:
             self.NavigationInteractorStyle = self.Interactor.GetInteractorStyle()       
         self.Interactor.SetInteractorStyle( self.ConfigurationInteractorStyle )  
-#        print " ~~~~~~~~~SS SetInteractorStyle: configurationInteractorStyle: %s %x " % ( self.Interactor.GetInteractorStyle().__class__.__name__, id(self.Interactor) )        
 
     def ResetNavigationInteraction(self):
         if self.NavigationInteractorStyle <> None:    
             self.Interactor.SetInteractorStyle( self.NavigationInteractorStyle )  
-#        print " ~~~~~~~~~ES SetInteractorStyle: navigationInteractorStyle: %s %x " % ( self.Interactor.GetInteractorStyle().__class__.__name__, id(self.Interactor) )         
 
 #----------------------------------------------------------------------------
 

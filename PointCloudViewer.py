@@ -1052,18 +1052,7 @@ class CPCPlot( DV3DPlot ):
         self.earth_actor = vtk.vtkActor()
         self.earth_actor.SetMapper( self.earth_mapper )
         self.earth_actor.GetProperty().SetColor(0,0,0)
-        self.renderer.AddActor( self.earth_actor )
-
- 
-#         else:   
-#             if self.process_mode == ProcessMode.Slicing:
-#                 self.setRenderMode( ProcessMode.HighRes )
-#                 self.execCurrentSlice()
-#            self.setSlicePosition( self.getSlicePosition() )
-#            self.printInteractionStyle( 'processEndInteractionEvent')
-#            self.renderWindow.GetInteractor().SetInteractorStyle( self.navigationInteractorStyle )
-#            self.emit(QtCore.SIGNAL("UpdateGui"), ( "SetSlicePosition", self.getSlicePosition() ) ) 
-               
+        self.renderer.AddActor( self.earth_actor )               
                 
     def initCollections( self, nCollections, init_args, **args ):
         if nCollections > 0:

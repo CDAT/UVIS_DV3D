@@ -404,7 +404,7 @@ class ConfigurableFunction:
     CfgManager = ConfigManager() 
     ConfigurableFunctions = {}    
     
-    def __init__( self, name, key=None, **args ):
+    def __init__( self, name, **args ):
         self.name = name
         self.persist = args.get( 'persist', True )
         self.value = self.CfgManager.addParameter( name, **args )
@@ -412,7 +412,7 @@ class ConfigurableFunction:
         self.kwargs = args
         self.label = args.get( 'label', self.name )
         self.units = args.get( 'units', '' ).strip().lower()
-        self.key = key
+        self.key = args.get( 'key', None )
         self.state = None
         self.initial_value = makeList( args.get( 'initValue', None ), self.getValueLength() )
 #        self.group = args.get( 'group', ConfigGroup.Display )  
@@ -485,9 +485,9 @@ class ConfigurableFunction:
         
 class ConfigurableSliderFunction( ConfigurableFunction ):
 
-    def __init__( self, name, key=None, **args ):
+    def __init__( self, name, **args ):
         self.sliderLabels = makeList( args.get( 'sliderLabels', [ 'Range Min', 'Range Max' ] ) )
-        ConfigurableFunction.__init__( self, name, key, **args  )
+        ConfigurableFunction.__init__( self, name, **args  )
         self.StartSlidingSignal =SIGNAL('startSliding')
         self.UpdateSlidingSignal =SIGNAL('updateSliding')
         self.type = 'slider'
