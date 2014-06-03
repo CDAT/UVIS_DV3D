@@ -4,7 +4,7 @@ Created on May 28, 2014
 @author: tpmaxwel
 '''
 
-import vtk, os, sys
+import vtk, os, sys, collections
 import numpy as np
 from ConfigurationFunctions import *
 
@@ -124,16 +124,20 @@ class Button:
         self.setToggleProps()       
 
     def processStateChangeEvent( self, obj, event, indirect = False ):
-        self.invokingEvent = True
-        self.state = ( self.state + 1 ) % self.numberOfStates
-        self.StateChangedSignal( self.id, self.key, self.state )
+        self.invokingEvent = True 
+        self.setButtonState( ( self.state + 1 ) % self.numberOfStates, indirect )      
+        self.invokingEvent = False
+        
+    def setButtonState( self, state, indirect = False ):
+        self.state = state
         if (self.key <> None) and not indirect:
             self.renderWindowInteractor.SetKeyEventInformation( 0, 0, self.key, 1, self.key )
             self.renderWindowInteractor.InvokeEvent( 'CharEvent' )
         self.setToggleProps()
-        self.invokingEvent = False
-            
-        print " ** Process State Change Event: id = %s, state = %d " % ( self.id, self.state )
+        self.broadcastState()
+        
+    def broadcastState(self):
+        self.StateChangedSignal( self.id, self.key, self.state )
         
     def place( self, bounds ):
         self.buttonRepresentation.PlaceWidget( bounds )
@@ -149,19 +153,22 @@ class Button:
     
 class ButtonBarWidget:
     
+    current_configuration_mode = None
+    
     def __init__( self, name, interactor, **args ):
         self.vtk_coord = vtk.vtkCoordinate()
         self.vtk_coord.SetCoordinateSystemToNormalizedDisplay()
         self.StateChangedSignal = SIGNAL('StateChanged')
         self.process_mode = ProcessMode.Default
-        self.current_configuration_mode = None
         self.currentSliders = {}
         self.slider_postions = [ [ [ 0.25, 0.75 ] ], [ [0.01,0.48], [0.52, 0.99 ] ], [ [0.01,0.3], [0.35,0.7], [0.75, 0.99 ] ], [ [0.01,0.24], [0.26,0.49], [0.51,0.74], [0.76, 0.99 ] ]    ]
-        self.slicePlanesVisible = [ True, False, False, False ]
+        self.slidersVisible = [ True, False, False, False ]
         self.interactor = interactor
         self.InteractionState = None
         self.LastInteractionState = None
+        self.activeSliceIndex = 0  
         self.name = name 
+        self.groups = {}
         self.origin = args.get( 'origin', OriginPosition.Upper_Left )
         self.orientation = args.get( 'orientation', Orientation.Vertical )
         self.position = args.get( 'position', ( 0.0, 1.0 ) )
@@ -170,8 +177,17 @@ class ButtonBarWidget:
         self.minScale = 0.3
         self.buttons = []
         self.visible = False
-        self.configurableFunctions = {}
+        self.configurableFunctions = collections.OrderedDict()
         self.updateWindowSize()
+        
+    def sliceRoundRobin(self, args, config_function = None ):
+        if args[0] == "InitConfig":
+            self.activeSliceIndex = ( self.activeSliceIndex+ 1 ) % 3
+            toggle_list = self.groups.get( config_function.name, [] )
+            for iSlice in range( len(toggle_list) ):
+                button = toggle_list[ iSlice ]
+                state = 1 if (iSlice == self.activeSliceIndex) else 0
+                button.setButtonState( state )
         
     def updateWindowSize(self):
         self.windowSize = self.interactor.GetRenderWindow().GetSize()
@@ -180,9 +196,9 @@ class ButtonBarWidget:
         self.interactor.GetRenderWindow().Render()
        
     def build( self, **args ):
-        current_location = self.getScreenPosition( self.position )
+        self.current_location = self.getScreenPosition( self.position, **args )
         for button in self.buttons:
-            current_location = self.placeButton( button, current_location )
+            self.current_location = self.placeButton( button, self.current_location )
             
     def reposition( self, **args ):
         print "Reposition: %d " % self.windowSize[0]
@@ -197,24 +213,21 @@ class ButtonBarWidget:
         print " placeButton[%s]: bounds = %s" % ( button.id, str(bounds) )
         button.place( bounds )
         return self.getOffsetScreenPosition( size, position )
-        
-    def addButton( self, **args ):
-        button = Button( self.interactor, **args )
-        button.StateChangedSignal.connect( self.processStateChangeEvent )
-        self.buttons.append( button )
-        return button
-    
-    def getScreenPosition(self, normalized_display_position, buffered = True ):
+           
+    def getScreenPosition(self, normalized_display_position, buffered = True, **args ):
         self.vtk_coord.SetValue(  normalized_display_position[0], normalized_display_position[1] )
         screen_pos = self.vtk_coord.GetComputedDisplayValue( self.getRenderer() )
-        if buffered: screen_pos = self.getBufferedPos( screen_pos  )
+        position_offset = args.get( 'offset', [ 0, 0 ] )
+        if   self.orientation == Orientation.Vertical: position_offset[ 0 ] = 0
+        elif self.orientation == Orientation.Horizontal: position_offset[ 1 ] = 0
+        if buffered: screen_pos = self.getBufferedPos( screen_pos, position_offset  )
         return screen_pos
   
-    def getBufferedPos( self, screen_pos ): 
+    def getBufferedPos( self, screen_pos, position_offset = [ 0, 0 ] ): 
         buff_screen_pos = list( screen_pos )         
         for ic in range(2):
-            if self.origin[ic]:  buff_screen_pos[ic] = screen_pos[ic] - self.buffer[ic]
-            else:                buff_screen_pos[ic] = screen_pos[ic] + self.buffer[ic]
+            if self.origin[ic]:  buff_screen_pos[ic] = screen_pos[ic] - self.buffer[ic] - position_offset[ic]
+            else:                buff_screen_pos[ic] = screen_pos[ic] + self.buffer[ic] + position_offset[ic]
         return buff_screen_pos
             
     def getOffsetScreenPosition( self, bsize, current_location ):
@@ -228,6 +241,9 @@ class ButtonBarWidget:
             
     def processStateChangeEvent( self, button_id, key, state ):
         self.StateChangedSignal( button_id, key, state )
+        self.updateInteractionState( button_id, state  ) 
+#        config_function = self.configurableFunctions.get( button_id, None )
+#        if config_function: config_function.processStateChangeEvent( state )
 #        button = self.buttons.get( button_id, None )
 
     def computeBounds( self, pos, size ):
@@ -270,6 +286,21 @@ class ButtonBarWidget:
     def addConfigButton( self, **args ):
         button = self.addButton( **args )
         self.addConfigurableFunction( button.id, **args)
+        return button
+
+    def getButton(self, name ): 
+        for b in self.buttons:
+            if b.id == name: return b
+        return None
+    
+    def addButton( self, **args ):
+        button = Button( self.interactor, **args )
+        button.StateChangedSignal.connect( self.processStateChangeEvent )
+        self.buttons.append( button )
+        roundRobin = args.get( 'group', None )
+        if roundRobin:
+            grpList = self.groups.setdefault(roundRobin,[])
+            grpList.append( button )
         return button
             
     def getRenderer(self):
@@ -461,66 +492,74 @@ class ButtonBarWidget:
             if configFunct.matches( key ): return ( configFunct.name, configFunct.persisted, self )
         return ( None, None, None )    
 
-    def updateInteractionState( self, state, **args ):    
+    def updateInteractionState( self, config_state, button_state, **args ):    
         rcf = None
-        if state == None: 
+        if config_state == None: 
             self.finalizeLeveling()
             self.endInteraction()   
         else:            
             if self.InteractionState <> None: 
                 configFunct = self.configurableFunctions[ self.InteractionState ]
-                if configFunct.name <> state:
+                if configFunct.name <> config_state:
                     configFunct.close()                 
-            configFunct = self.configurableFunctions.get( state, None )
-            if configFunct and ( configFunct.type <> 'generic' ): 
-                rcf = configFunct
-#                print " UpdateInteractionState, state = %s, cf = %s " % ( state, str(configFunct) )
-            if not configFunct and self.acceptsGenericConfigs:
-                configFunct = ConfigurableFunction( state, None, None )              
-                self.configurableFunctions[ state ] = configFunct
+            configFunct = self.configurableFunctions.get( config_state, None )
+#                print " UpdateInteractionState, config_state = %s, cf = %s " % ( config_state, str(configFunct) )
             if configFunct:
                 if configFunct.type <> 'slider': 
                     self.releaseSliders() 
-                configFunct.open( state )
-                self.InteractionState = state                   
+                configFunct.open( config_state )
+                self.InteractionState = config_state                   
                 self.LastInteractionState = self.InteractionState
-                self.disableVisualizationInteraction()               
-                configFunct.processInteractionEvent( [ "InitConfig" ] )
+                self.disableVisualizationInteraction()
+                initialize_config_state = ( configFunct.label <> ButtonBarWidget.current_configuration_mode )               
+                configFunct.processInteractionEvent( [ "InitConfig", button_state, initialize_config_state ] )
                 
                 if (configFunct.type == 'slider'):
                     force_enable = args.get( 'enable', False )
-#                    self.slicePlanesVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
-                    self.current_configuration_mode = configFunct.label
+#                    self.slidersVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
+
                     tvals = configFunct.value.getValues()
+                    if initialize_config_state: self.releaseSliders()
+                    
                     if configFunct.position <> None:
                         n_active_sliders = configFunct.position[1]
                         position_index = configFunct.position[0]
-                        if self.slicePlanesVisible[ position_index ] or force_enable:
+                        
+                        if initialize_config_state:
+                            self.slidersVisible = [ ( iSlice == position_index ) for iSlice in range(4)  ] 
+                        else:
+                            self.slidersVisible[ position_index ] = button_state
+                            
+#                        slicePosition = configFunct.value
+#                        self.setSliderValue( position_index, slicePosition.getValue() )  
+                                               
+                        if self.slidersVisible[ position_index ] or force_enable:
                             self.commandeerSlider( position_index, configFunct.sliderLabels[0], configFunct.getRangeBounds(), tvals[0]  )
                             self.positionSlider( position_index, n_active_sliders )
-                            self.slicePlanesVisible[ position_index ] = True
+                            self.slidersVisible[ position_index ] = True
                         else: self.releaseSlider( position_index )
                     else:
                         n_active_sliders = len( configFunct.sliderLabels )
                         for slider_index in range(4):
-                            if self.slicePlanesVisible[ slider_index ]:
+                            if self.slidersVisible[ slider_index ]:
                                 self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.getRangeBounds(), tvals[slider_index]  )
                                 self.positionSlider( slider_index, n_active_sliders )
                             else:
                                 self.releaseSlider( slider_index )
+                    ButtonBarWidget.current_configuration_mode = configFunct.label
                     configFunct.processInteractionEvent( [ "ProcessSliderInit" ] )
                 self.render()
 
-            elif state == 'colorbar':
+            elif config_state == 'colorbar':
                 self.toggleColorbarVisibility()                        
-            elif state == 'reset':
+            elif config_state == 'reset':
                 self.resetCamera()              
                 if  len(self.persistedParameters):
                     pname = self.persistedParameters.pop()
                     configFunct = self.configurableFunctions[pname]
                     param_value = configFunct.reset() 
                     if param_value: self.persistParameterList( [ (configFunct.name, param_value), ], update=True, list=False )                                      
-        return rcf
+        return configFunct
 
     def enableVisualizationInteraction(self): 
         pass
@@ -552,6 +591,9 @@ class ButtonBarWidget:
     def initializeConfiguration( self, **args ):
         for configFunct in self.configurableFunctions.values():
             configFunct.init( **args )
+        for button in self.buttons:
+            if button.toggle:
+                button.broadcastState()
 
 if __name__ == '__main__':
         

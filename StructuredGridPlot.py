@@ -46,7 +46,7 @@ class StructuredGridPlot(DV3DPlot):
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
             bbar = self.getInteractionButtons()
-            bbar.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4) ]
+            bbar.slidersVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4) ]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":

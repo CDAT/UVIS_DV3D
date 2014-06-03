@@ -106,7 +106,7 @@ class DV3DPlot():
         self.configuring = False
         self.configurationInteractorStyle = vtk.vtkInteractorStyleUser()
         self.activated = False
-        self.buttons = {}
+#        self.buttons = {}
         self.renderWindowSize = None
 
         self.isAltMode = False
@@ -115,8 +115,8 @@ class DV3DPlot():
         self.colormapWidget = None 
         self.colormapWindowSize = None
         interactionButtons = self.getInteractionButtons()
-        interactionButtons.addSliderButton( names=['zScale'], key='Z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0 )
-        interactionButtons.addConfigButton( names=['colormap'], key='m', label='Choose Colormap', interactionHandler=self.processChooseColormapCommand, initValue=[ 'jet', False, False ]  )
+        interactionButtons.addSliderButton( names=['VerticalScaling'], key='Z', label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0 )
+        interactionButtons.addConfigButton( names=['ChooseColormap'], key='m', label='Choose Colormap', interactionHandler=self.processChooseColormapCommand, initValue=[ 'jet', False, False ]  )
 
     def processVerticalScalingCommand( self, args, config_function ):
         pass 
@@ -137,7 +137,8 @@ class DV3DPlot():
             if ( self.colormapWidget == None ): #  or self.colormapWidget.checkWindowSizeChange():
                 self.colormapWidget = ColorbarListWidget( self.renderWindowInteractor ) 
                 self.colormapWidget.StateChangedSignal.connect( self.processInteractionEvent )
-            self.colormapWidget.toggleVisibility()
+            if len( args ) == 1:    self.colormapWidget.toggleVisibility()
+            else:                   self.colormapWidget.toggleVisibility( state = args[1] )
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -148,26 +149,14 @@ class DV3DPlot():
             colormapParam.setValues( cmap_data  )
 
     def getInteractionState( self, key ):
-        bbar = self.getInteractionButtons()
-        state = bbar.getInteractionState( key )
-        if state[0] <> None: return state
+        for bbar in self.button_bars.values():
+            state = bbar.getInteractionState( key )
+            if state[0] <> None: return state
         return ( None, None, None )    
             
     def repositionButtons(self):
-        self.updateGuiVisibility()
         for button_bar in self.button_bars.values():
-            button_bar.reposition()
- 
-    def toggleGuiVisibility(self):
-        self.gui_visibility = ( self.gui_visibility + 1 ) % 3
-        self.updateGuiVisibility()
-        self.render()
-
-    def updateGuiVisibility(self):
-        for button_bar in self.button_bars.values(): button_bar.hide()
-        if self.gui_visibility == 0:  self.showConfigurationButton()
-        if self.gui_visibility == 1:  self.showPlotButtons()
-                                          
+            button_bar.reposition()                                          
 
     def displayEventType(self, caller, event):
         print " --> Event: %s " % event 
@@ -195,19 +184,22 @@ class DV3DPlot():
     def processKeyEvent( self, key, caller=None, event=None, **args ):
         keysym = caller.GetKeySym() if caller else key
         ctrl = caller.GetControlKey() if caller else args.get( 'ctrl', 0 )
-        if self.onKeyEvent( [ key, keysym, ctrl ] ):
-            pass
-        else:
-            ( state, persisted, guibar ) =  self.getInteractionState( key )
-    #            print " %s Set Interaction State: %s ( currently %s) " % ( str(self.__class__), state, self.InteractionState )
-            if state <> None: 
-                print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
-                guibar.updateInteractionState( state, **args  )                 
-                self.isAltMode = False 
-                
-        for button_bar in self.button_bars.values():
-            button_bar.processKeyEvent( keysym, ctrl )
-        return 0
+        self.onKeyEvent( [ key, keysym, ctrl ] ) 
+        return 0       
+#         
+#         if self.onKeyEvent( [ key, keysym, ctrl ] ):
+#             pass
+#         else:
+#             ( state, persisted, guibar ) =  self.getInteractionState( key )
+#     #            print " %s Set Interaction State: %s ( currently %s) " % ( str(self.__class__), state, self.InteractionState )
+#             if state <> None: 
+#                 print " ------------------------------------------ setInteractionState, key=%s, state = %s    ------------------------------------------ " % (str(key), str(state)  )
+#                 guibar.updateInteractionState( state, **args  )                 
+#                 self.isAltMode = False 
+#                 
+#         for button_bar in self.button_bars.values():
+#             button_bar.processKeyEvent( keysym, ctrl )
+#         return 0
 
     def onLeftButtonPress( self, caller, event ):
         return 0
@@ -362,37 +354,61 @@ class DV3DPlot():
         bbar = self.button_bars.get( bbar_name, None )
         if bbar == None:
             bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
-            config_button = bbar.addButton( names=['Configure'], id='Configure', key='g', nstates = 3 )
+            config_button = bbar.addConfigButton( names=['Configure'], id='Configure', key='g', toggle=True, interactionHandler=self.processConfigurationToggle )
 #            config_button.StateChangedSignal.connect( self.togglePlotButtons )
             bbar.build()
             self.button_bars[ bbar_name ] = bbar
         bbar.show()
 
-    def showPlotButtons(self):
+    def buildPlotButtons(self):
+        bbar_name = 'Plot'
+        bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor, position=( 0.0, 0.96) )
+        b = bbar.addConfigButton( names=['SliceRoundRobin'],  key='p', interactionHandler=bbar.sliceRoundRobin )
+        b = bbar.addSliderButton( names=['XSlider'],  key='x', toggle=True, group='SliceRoundRobin', state=1, sliderLabels='X Slice Position', label="Slicing", position=[0,3], interactionHandler=self.processSlicingCommand )
+        b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+        b = bbar.addSliderButton( names=['YSlider'],  key='y', toggle=True, group='SliceRoundRobin', sliderLabels='Y Slice Position', label="Slicing", position=[1,3], interactionHandler=self.processSlicingCommand )
+        b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+        b = bbar.addSliderButton( names=['ZSlider'],  key='z', toggle=True, group='SliceRoundRobin', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
+        b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
+        b = bbar.addButton( names=['ToggleSurfacePlot'],  key='s', toggle=True )
+        b = bbar.addButton( names=['ToggleVolumePlot'], key='v', toggle=True )
+        bbar.build()
+        self.button_bars[ bbar_name ] = bbar
+ 
+    def fetchPlotButtons( self, show = False ):
         bbar_name = 'Plot'
         bbar = self.button_bars.get( bbar_name, None )
-        if bbar == None:
-            b = bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
-            b = bbar.addButton( names=['ToggleSlicePlot'],  key='p' )
-            b = bbar.addButton( names=['XSlider'],  key='x', toggle=True, state=1 )
-            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
-            b = bbar.addButton( names=['YSlider'],  key='y', toggle=True )
-            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
-            b = bbar.addButton( names=['ZSlider'],  key='z', toggle=True )
-            b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
-            b = bbar.addButton( names=['ToggleSurfacePlot'],  key='s', toggle=True )
-            b = bbar.addButton( names=['ToggleVolumePlot'], key='v', toggle=True )
-            bbar.build()
-            self.button_bars[ bbar_name ] = bbar
-        bbar.show()
+        if bbar == None: self.buildPlotButtons()
+        if show:
+            bbar.show()
+            self.showInteractionButtons()
+        return bbar
+    
+    def toggleCongurationButtons(self, isVisible ):
+        config_bbars = [ 'Plot', 'Interaction' ]
+        for bbar_name in config_bbars:
+            bbar = self.button_bars.get( bbar_name, None )
+            if bbar:
+                if isVisible: bbar.show()
+                else: bbar.hide()
+    
+    def processConfigurationToggle( self, args, config_function = None ):
+        if args[0] == "InitConfig":
+            name = config_function.name
+            bbar = self.button_bars[ name ]
+            button = bbar.getButton( name )
+            self.toggleCongurationButtons( button.state)
+         
+    def processSlicingCommand( self, args, config_function = None ):
+        pass
 
     def initializeConfiguration( self, **args ) :
-        bbar = self.getInteractionButtons()
-        bbar.initializeConfiguration( **args )
+        for bbar in self.button_bars.values():
+            bbar.initializeConfiguration( **args )
         
     def addInteractionButtons(self):
         bbar_name = 'Interaction'
-        bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor )
+        bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor, position=( 0.0, 0.5) )
         self.button_bars[ bbar_name ] = bbar
         return bbar
     
@@ -401,10 +417,10 @@ class DV3DPlot():
         if bbar == None:  bbar = self.addInteractionButtons()
         return bbar
         
-    def showInteractionButtons(self):
+    def showInteractionButtons( self, **args ):
         bbar_name = 'Interaction'
         bbar = self.button_bars[ bbar_name ]
-        bbar.build()
+        bbar.build( **args )
         bbar.show() 
              
     def onWindowModified( self, caller, event ):
@@ -459,7 +475,7 @@ class DV3DPlot():
         keysym =  eventArgs[1]            
         if keysym   == "i":  self.clearInteractions()
         elif keysym == "b":  self.toggleColorbarVisibility()
-        elif keysym == "g":  self.toggleGuiVisibility()
+        elif keysym == "g":  self.fetchPlotButtons(True)
 #        elif keysym == "2":  self.enableDualInputs()
         else: return False
         return True
@@ -531,6 +547,7 @@ class DV3DPlot():
 
     def start(self):
         self.renderWindowInteractor.Initialize()
+        self.showConfigurationButton()
         self.renderWindow.Render()
         self.renderWindowInteractor.Start()
          

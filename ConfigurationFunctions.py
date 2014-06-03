@@ -419,6 +419,10 @@ class ConfigurableFunction:
         self.active = args.get( 'active', True )
         self._persisted = True
         self.interactionHandler = args.get( 'interactionHandler', None )
+        
+    def processStateChangeEvent( self, state ):
+        args = [ "InitConfig", state ]
+        self.interactionHandler( args, self )
 
     @classmethod
     def activate( cls ):

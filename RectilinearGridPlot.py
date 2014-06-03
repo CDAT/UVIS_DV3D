@@ -140,15 +140,12 @@ class RectGridPlot(StructuredGridPlot):
         self.volRenderConfig = [ 'Default', 'False' ]
         self.transFunctGraphVisible = False
         self.transferFunctionConfig = None
-        self.activeSliceIndex = 0
         interactionButtons = self.addInteractionButtons()
-        interactionButtons.addSliderButton( names=['colorScale'], key='C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
-        interactionButtons.addSliderButton( names=['opacityScale'], key='o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
-        interactionButtons.addSliderButton( names=['xSlider'], key='x', sliderLabels='X Slice Position', label="Slicing", position=[0,3], interactionHandler=self.processSlicingCommand )
-        interactionButtons.addSliderButton( names=['ySlider'], key='y', sliderLabels='Y Slice Position', label="Slicing", position=[1,3], interactionHandler=self.processSlicingCommand )
-        interactionButtons.addSliderButton( names=['zSlider'], key='z', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
-        interactionButtons.addSliderButton( names=['functionScale'], key='T', label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
-        interactionButtons.addSliderButton( names=['isosurfaceValue'], key='L', sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
+        interactionButtons.addSliderButton( names=['ScaleColormap'], key='C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
+        interactionButtons.addSliderButton( names=['ScaleTransferFunction'], key='T', label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
+        interactionButtons.addSliderButton( names=['ScaleOpacity'], key='o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+        interactionButtons.addSliderButton( names=['IsosurfaceValue'], key='L', sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
+        plotButtons = self.fetchPlotButtons()
 #         self.addConfigurableLevelingFunction( 'colorScale', 'C', label='Colormap Scale', units='data', setLevel=self.scaleColormap, getLevel=self.getDataRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
 #         self.addConfigurableLevelingFunction( 'opacity', 'O', label='Slice Plane Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setOpacity, activeBound='min',  getLevel=self.getOpacity, isDataValue=False, layerDependent=True, bound = False, group=ConfigGroup.Rendering )
 #         self.addConfigurableLevelingFunction( 'contourDensity', 'g', label='Contour Density', activeBound='max', setLevel=self.setContourDensity, getLevel=self.getContourDensity, layerDependent=True, windowing=False, rangeBounds=[ 3.0, 30.0, 1 ], bound=False, isValid=self.hasContours, group=ConfigGroup.Rendering )
@@ -179,7 +176,7 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
             bbar = self.getInteractionButtons()
-            bbar.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
+            bbar.slidersVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -207,7 +204,7 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
             bbar = self.getInteractionButtons()
-            bbar.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
+            bbar.slidersVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -240,7 +237,7 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
             bbar = self.getInteractionButtons()
-            bbar.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
+            bbar.slidersVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -265,7 +262,7 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
             bbar = self.getInteractionButtons()
-            bbar.slicePlanesVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
+            bbar.slidersVisible = [ ( islider < len(config_function.sliderLabels) ) for islider in range(4)]
         elif args and args[0] == "Open":
             pass
         elif args and args[0] == "Close":
@@ -295,18 +292,10 @@ class RectGridPlot(StructuredGridPlot):
         elif args and args[0] == "EndConfig":
             pass
         elif args and args[0] == "InitConfig":
-            bbar = self.getInteractionButtons()
-            if ( config_function.label <> bbar.current_configuration_mode ):
-                bbar.releaseSliders()
-                for index in range(3):  self.modifySlicePlaneVisibility( index, "xyz"[index], False )  
-                self.updateTextDisplay( config_function.label )
-                bbar.slicePlanesVisible = [ ( iSlice == plane_index ) for iSlice in range(4)  ] 
-            else:
-                bbar.slicePlanesVisible[ plane_index ] = not bbar.slicePlanesVisible[ plane_index ]   
-            slider_value = slicePosition.getValue() 
-            bbar = self.getInteractionButtons()
-            bbar.setSliderValue( plane_index, slider_value )  
-            self.modifySlicePlaneVisibility( plane_index, config_function.key )
+            if (len(args) > 2) and args[2]: 
+                for index in range(3):  self.modifySlicePlaneVisibility( index, "xyz"[index], False ) 
+                self.updateTextDisplay( config_function.label ) 
+            self.modifySlicePlaneVisibility( plane_index, config_function.key, args[1] )
             self.render() 
         elif args and args[0] == "ProcessSliderInit":
             for plane_index in range(3):
@@ -989,15 +978,15 @@ class RectGridPlot(StructuredGridPlot):
         self.renderWindowInteractor.SetKeyEventInformation( ctrl, 0, key, 1, key )
         self.renderWindowInteractor.InvokeEvent( 'CharEvent' )
 
-    def toggleSliceVisibility( self ):
-        self.processKeyEvent( 'W', ctrl=1 )
-        self.activeSliceIndex =  ( self.activeSliceIndex + 1 ) % 3
-        for iSlice in range( 3 ):
-            slice = "xyz"[iSlice]
-            if iSlice ==  self.activeSliceIndex: 
-                plane_index, plane_widget = self.getPlaneWidget( slice )
-                self.processKeyEvent( slice, None, None, enable=True  )
-        self.render() 
+#     def toggleSliceVisibility( self ):
+#         self.processKeyEvent( 'W', ctrl=1 )
+#         self.activeSliceIndex =  ( self.activeSliceIndex + 1 ) % 3
+#         for iSlice in range( 3 ):
+#             slice = "xyz"[iSlice]
+#             if iSlice ==  self.activeSliceIndex: 
+#                 plane_index, plane_widget = self.getPlaneWidget( slice )
+#                 self.processKeyEvent( slice, None, None, enable=True  )
+#         self.render() 
                     
     def EventWatcher( self, caller, event ): 
         print "Event %s on class %s "  % ( event, caller.__class__.__name__ ) 
@@ -1008,7 +997,7 @@ class RectGridPlot(StructuredGridPlot):
         key = eventArgs[0]
         ctrl = eventArgs[2]
         if   (  ( key == 'v' ) and not ctrl    ):   self.toggleVolumeVisibility()              
-        elif (  ( key == 'p' ) and not ctrl    ):   self.toggleSliceVisibility() 
+#        elif (  ( key == 'p' ) and not ctrl    ):   self.toggleSliceVisibility() 
         elif (  ( key == 's' ) and not ctrl    ):   self.toggleIsosurfaceVisibility() 
         elif (  ( key == 'W' ) and ctrl        ): 
             bbar = self.getInteractionButtons()  
@@ -1325,9 +1314,9 @@ class RectGridPlot(StructuredGridPlot):
         plane_index, plane_widget = self.getPlaneWidget( plane )
         bbar = self.getInteractionButtons()
         if make_visible == None:  
-            make_visible = bbar.slicePlanesVisible[ slider_index ] 
+            make_visible = bbar.slidersVisible[ slider_index ] 
         else:
-            bbar.slicePlanesVisible[ slider_index ] = make_visible
+            bbar.slidersVisible[ slider_index ] = make_visible
         if make_visible:   
             plane_widget.VisibilityOn()
             if plane == 'z': 

@@ -77,7 +77,9 @@ class ListWidget:
         for button in self.buttons.keys():
             button.Off()
             
-    def toggleVisibility(self):
+    def toggleVisibility( self, **args ):
+        state = args.get( 'state', None )
+        if state <> None: self.visible = True if ( state == 0 ) else False  
         if self.visible: 
             self.hide()
         else:
