@@ -40,10 +40,13 @@ class Button:
     def __init__( self, iren, **args ):
         self.StateChangedSignal = SIGNAL('StateChanged')
         self.invokingEvent = False
+        self.active = True
         self.renderWindowInteractor = iren
         self.names = args.get( 'names', [] )
         self.state = args.get( 'state', 0 )
+        self.children = args.get( 'children', [] )
         self.toggle = args.get( 'toggle', False )
+        self.parents = args.get( 'parents', [] )
         self.numberOfStates = args.get( 'nstates', ( 2 if self.toggle else len( self.names ) ) )
         self.id = args.get( 'id', self.names[0] if self.numberOfStates else None )
         self.key = args.get( 'key', None )
@@ -120,7 +123,6 @@ class Button:
     
     def setToggleState( self, state ):
         self.state = state
-        if state == 0: print "Toggle '%s' off" % self.id
         self.setToggleProps()       
 
     def processStateChangeEvent( self, obj, event, indirect = False ):
@@ -146,14 +148,24 @@ class Button:
         return self.image_size
     
     def On(self):
-        self.buttonWidget.On()
+        if self.active: 
+            self.buttonWidget.On()
 
     def Off(self):
         self.buttonWidget.Off()
-    
+        
+    def activate(self):
+        self.active = True
+        self.buttonWidget.On()
+
+    def deactivate(self):
+        self.active = False
+        self.buttonWidget.Off()
+
 class ButtonBarWidget:
     
     current_configuration_mode = None
+    button_bars = {}
     
     def __init__( self, name, interactor, **args ):
         self.vtk_coord = vtk.vtkCoordinate()
@@ -178,8 +190,36 @@ class ButtonBarWidget:
         self.buttons = []
         self.visible = False
         self.configurableFunctions = collections.OrderedDict()
+        ButtonBarWidget.button_bars[ name ] = self
         self.updateWindowSize()
-        
+     
+    @classmethod   
+    def getButtonBar( cls, name ):
+        return cls.button_bars.get( name, None )
+
+    @classmethod   
+    def getButtonBars( cls ):
+        return cls.button_bars.values()
+
+    @classmethod   
+    def findButton( cls, name  ):
+        for bbar in cls.button_bars.values():
+            b = bbar.getButton( name )
+            if b <> None: return b
+        return None
+
+    @classmethod   
+    def repositionButtons( cls ):
+        for button_bar in cls.button_bars.values():
+            button_bar.reposition()                                          
+
+    @classmethod   
+    def initializeConfigurations( cls, **args ) :
+        for bbar in cls.button_bars.values():
+            bbar.initializeConfiguration( **args )
+        for bbar in cls.button_bars.values():
+            bbar.initializeChildren( **args )
+                    
     def sliceRoundRobin(self, args, config_function = None ):
         if args[0] == "InitConfig":
             self.activeSliceIndex = ( self.activeSliceIndex+ 1 ) % 3
@@ -505,6 +545,7 @@ class ButtonBarWidget:
             configFunct = self.configurableFunctions.get( config_state, None )
 #                print " UpdateInteractionState, config_state = %s, cf = %s " % ( config_state, str(configFunct) )
             if configFunct:
+                child_activations = []
                 if configFunct.type <> 'slider': 
                     self.releaseSliders() 
                 configFunct.open( config_state )
@@ -512,14 +553,19 @@ class ButtonBarWidget:
                 self.LastInteractionState = self.InteractionState
                 self.disableVisualizationInteraction()
                 initialize_config_state = ( configFunct.label <> ButtonBarWidget.current_configuration_mode )               
-                configFunct.processInteractionEvent( [ "InitConfig", button_state, initialize_config_state ] )
+                configFunct.processInteractionEvent( [ "InitConfig", button_state, initialize_config_state, self ] )
+                if initialize_config_state:
+                    bbar = ButtonBarWidget.getButtonBar( 'Interaction' )
+                    child_activations = bbar.initConfigState( active_button=configFunct.name )
                 
                 if (configFunct.type == 'slider'):
                     force_enable = args.get( 'enable', False )
 #                    self.slidersVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
 
                     tvals = configFunct.value.getValues()
-                    if initialize_config_state: self.releaseSliders()
+                    if initialize_config_state: 
+                        for bbar in ButtonBarWidget.getButtonBars():
+                            bbar.releaseSliders()
                     
                     if configFunct.position <> None:
                         n_active_sliders = configFunct.position[1]
@@ -548,10 +594,9 @@ class ButtonBarWidget:
                                 self.releaseSlider( slider_index )
                     ButtonBarWidget.current_configuration_mode = configFunct.label
                     configFunct.processInteractionEvent( [ "ProcessSliderInit" ] )
-                self.render()
-
-            elif config_state == 'colorbar':
-                self.toggleColorbarVisibility()                        
+                for child_button in child_activations: 
+                    child_button.setButtonState(1)
+                self.render()                     
             elif config_state == 'reset':
                 self.resetCamera()              
                 if  len(self.persistedParameters):
@@ -587,6 +632,30 @@ class ButtonBarWidget:
 
     def endConfiguration( self ):
         pass
+    
+    def updateChildState(self, child_button, parent_name ):
+        if len( child_button.parents ):
+            if ( parent_name in child_button.parents ):
+                parent_button = ButtonBarWidget.findButton( parent_name )
+                if parent_button.state:     
+                    child_button.activate() 
+                    if child_button.id in parent_button.children:
+                        return True
+                else:                       
+                    child_button.deactivate()
+        return False
+                
+    
+    def initConfigState( self, **args ):
+        active_button = args.get( 'active_button', '' )
+        child_activations = [ ]
+        for button in self.buttons:
+            if self.updateChildState( button, active_button ):
+                child_activations.append( button )
+            else:
+                if button.toggle and (button.id <> active_button):
+                    button.setToggleState(0)
+        return child_activations
            
     def initializeConfiguration( self, **args ):
         for configFunct in self.configurableFunctions.values():
@@ -594,6 +663,12 @@ class ButtonBarWidget:
         for button in self.buttons:
             if button.toggle:
                 button.broadcastState()
+                
+    def initializeChildren( self, **args ):
+        for button in self.buttons:
+            for parent_name in button.parents:
+                self.updateChildState( button, parent_name )
+
 
 if __name__ == '__main__':
         

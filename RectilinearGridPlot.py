@@ -133,19 +133,20 @@ class RectGridPlot(StructuredGridPlot):
         self.updatingOTF = False
         self.configTime = None
         self.clipping_enabled = False
-        self.useClipper = False
         self.cropRegion = None
         self.cropZextent = None
         self.clipper = None
         self.volRenderConfig = [ 'Default', 'False' ]
         self.transFunctGraphVisible = False
         self.transferFunctionConfig = None
-        interactionButtons = self.addInteractionButtons()
-        interactionButtons.addSliderButton( names=['ScaleColormap'], key='C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
-        interactionButtons.addSliderButton( names=['ScaleTransferFunction'], key='T', label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
-        interactionButtons.addSliderButton( names=['ScaleOpacity'], key='o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
-        interactionButtons.addSliderButton( names=['IsosurfaceValue'], key='L', sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
-        plotButtons = self.fetchPlotButtons()
+        interactionButtons = self.getInteractionButtons()
+        interactionButtons.addSliderButton( names=['ScaleColormap'], key='C', toggle=True, label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
+        interactionButtons.addSliderButton( names=['ScaleTransferFunction'], key='T', toggle=True, parents=['ToggleVolumePlot'], label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
+        interactionButtons.addSliderButton( names=['ScaleOpacity'], key='o', toggle=True, label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+        interactionButtons.addSliderButton( names=['IsosurfaceValue'], key='L', toggle=True, parents=['ToggleSurfacePlot'], sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
+        interactionButtons.addConfigButton( names=['Colorbar'], key='b', toggle=True, label='Show Colorbar', interactionHandler=self.processShowColorbarCommand )
+        self.fetchPlotButtons()
+        
 #         self.addConfigurableLevelingFunction( 'colorScale', 'C', label='Colormap Scale', units='data', setLevel=self.scaleColormap, getLevel=self.getDataRangeBounds, layerDependent=True, adjustRangeInput=0, group=ConfigGroup.Color )
 #         self.addConfigurableLevelingFunction( 'opacity', 'O', label='Slice Plane Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setOpacity, activeBound='min',  getLevel=self.getOpacity, isDataValue=False, layerDependent=True, bound = False, group=ConfigGroup.Rendering )
 #         self.addConfigurableLevelingFunction( 'contourDensity', 'g', label='Contour Density', activeBound='max', setLevel=self.setContourDensity, getLevel=self.getContourDensity, layerDependent=True, windowing=False, rangeBounds=[ 3.0, 30.0, 1 ], bound=False, isValid=self.hasContours, group=ConfigGroup.Rendering )
@@ -164,6 +165,11 @@ class RectGridPlot(StructuredGridPlot):
 #        self.addUVCDATConfigGuiFunction( 'renderType', VolumeRenderCfgDialog, 'v', label='Choose Volume Renderer', setValue=self.setVolRenderCfg, getValue=self.getVolRenderCfg, layerDependent=True, group=ConfigGroup.Rendering )
 
 
+    def processShowColorbarCommand( self, args, config_function = None ):
+        if args and args[0] == "InitConfig":
+            self.toggleColorbarVisibility(state=args[1])                       
+            self.render() 
+            
     def processOpacityScalingCommand( self, args, config_function = None ):
         opacityRange = config_function.value
         if args and args[0] == "StartConfig":
@@ -334,12 +340,13 @@ class RectGridPlot(StructuredGridPlot):
         StructuredGridPlot.activateEvent( self, caller, event )
         if self.clipper and ( self.cropRegion == None ):
             self.renwin = self.renderer.GetRenderWindow( )
-            if self.renwin <> None:
-                
+            if self.renwin <> None:                
                 if ( self.renderWindowInteractor <> None ): 
                     self.clipper.SetInteractor( self.renderWindowInteractor )
                     self.cropRegion = self.getVolumeBounds()
                     self.clipper.PlaceWidget( self.cropRegion )
+                    self.clipPlanes = vtk.vtkPlanes() 
+                    self.clipper.GetPlanes( self.clipPlanes )
         self.render() 
 
     def initializePlots(self):
@@ -367,13 +374,14 @@ class RectGridPlot(StructuredGridPlot):
     def clipOff(self):
         self.clipper.SetEnabled( False )
         self.clipper.Off()
-        self.persistCropRegion()
                    
     def toggleClipping( self, enableClipping ):
-        self.clipping_enabled = enableClipping 
-        self.volumeMapper.CroppingOn()
-        if self.clipping_enabled and self.isInSelectedCell:     self.clipOn()
-        else:                                                   self.clipOff()
+        self.clipping_enabled = enableClipping        
+        if self.clipping_enabled:
+            self.volumeMapper.CroppingOn()     
+            self.clipOn()
+        else:                            
+            self.clipOff()
     
     def getVolRenderCfg( self ):
         return [ ';'.join( self.volRenderConfig ) ]
@@ -475,6 +483,9 @@ class RectGridPlot(StructuredGridPlot):
             parmList = []
             parmList.append( ( 'cropRegion', self.cropRegion ) ) 
             self.persistParameterList( parmList )
+            
+    def persistParameterList( self, parmList ):
+        pass
         
     def clearTransferFunctionConfigDialog(self):
         self.persistTransferFunctionConfig()
@@ -625,7 +636,7 @@ class RectGridPlot(StructuredGridPlot):
                 textureRange = ispec.GetScalarRange()
                 self.probeFilter.SetSource( ispec )
                 self.generateTexture = True
-                mapperInputPort = self.polyClipper.GetOutputPort() if self.useClipper else self.levelSetFilter.GetOutputPort()
+                mapperInputPort = self.levelSetFilter.GetOutputPort() # self.polyClipper.GetOutputPort() 
                 self.probeFilter.SetInputConnection( mapperInputPort )
                 self.levelSetMapper.SetInputConnection( self.probeFilter.GetOutputPort() ) 
                 self.levelSetMapper.SetScalarRange( textureRange )
@@ -669,16 +680,16 @@ class RectGridPlot(StructuredGridPlot):
         if vtk.VTK_MAJOR_VERSION <= 5:  self.levelSetFilter.SetInput(self.input())
         else:                           self.levelSetFilter.SetInputData(self.input())        
 
-        if self.useClipper:
-            self.clipPlanes = vtk.vtkPlanes() 
-            self.polyClipper = vtk.vtkClipPolyData()
-            self.polyClipper.SetInputConnection( self.levelSetFilter.GetOutputPort() )
-            self.polyClipper.SetClipFunction( self.clipPlanes )
-            self.polyClipper.InsideOutOn()
+#         self.clipper.GetPlanes( self.clipPlanes )
+#         self.polyClipper = vtk.vtkClipPolyData()
+#         self.polyClipper.SetInputConnection( self.levelSetFilter.GetOutputPort() )
+#         self.polyClipper.SetClipFunction( self.clipPlanes )
+#         self.polyClipper.InsideOutOn()
+#         self.polyClipper.GenerateClipScalarsOn()     
                 
         self.levelSetMapper = vtk.vtkPolyDataMapper()
         self.levelSetMapper.SetColorModeToMapScalars()
-        mapperInputPort = self.polyClipper.GetOutputPort() if self.useClipper else self.levelSetFilter.GetOutputPort()
+        mapperInputPort = self.levelSetFilter.GetOutputPort() # self.polyClipper.GetOutputPort() 
         if ( self.probeFilter == None ):
             imageRange = self.getImageValues( self.range ) 
             self.levelSetMapper.SetInputConnection( mapperInputPort ) 
@@ -767,12 +778,6 @@ class RectGridPlot(StructuredGridPlot):
         self.volumeMapper.SetBlendModeToComposite() 
         self.volumeMapper.CroppingOff()
        
-        self.clipper = vtk.vtkBoxWidget()
-        self.clipper.RotationEnabledOff()
-        self.clipper.SetPlaceFactor( 1.0 )    
-        self.clipper.AddObserver( 'StartInteractionEvent', self.startClip )
-        self.clipper.AddObserver( 'EndInteractionEvent', self.endClip )
-        self.clipper.AddObserver( 'InteractionEvent', self.executeClip )
 #        self.clipper.AddObserver( 'AnyEvent', self.clipObserver )
         
 #        self.volumeMapper.SetScalarModeToUsePointFieldData()
@@ -907,17 +912,17 @@ class RectGridPlot(StructuredGridPlot):
         print " Clip Observer: %s ", str(event)
 
     def startClip( self, caller=None, event=None ):
-        self.clearCellSelection()
+        pass
 
     def endClip( self, caller=None, event=None ):
         pass
         
     def executeClip( self, caller=None, event=None ):
-        planes = vtk.vtkPlanes(); np = 6
-        self.clipper.GetPlanes(planes)
+        np = 6
+        self.clipper.GetPlanes( self.clipPlanes )
         if not self.cropRegion: self.cropRegion = [0.0]*np
         for ip in range( np ):
-            plane = planes.GetPlane( ip )
+            plane = self.clipPlanes.GetPlane( ip )
             o = plane.GetOrigin()
             self.cropRegion[ip] = o[ ip/2 ]
         self.cropVolume() 
@@ -955,23 +960,24 @@ class RectGridPlot(StructuredGridPlot):
 #        printArgs( "ResetCameraClippingRange", focal_point=f, cam_pos=p, vol_bounds=bounds )
         self.renderer.ResetCameraClippingRange() 
         
-    def toggleVolumeVisibility(self):
+    def toggleVolumeVisibility( self, **args ):
         if self.volume == None:
             self.buildVolumePipeline()
-        isVisible = self.volume.GetVisibility()
-        if isVisible: self.volume.VisibilityOff()
-        else: self.volume.VisibilityOn()
+        make_visible = args.get( 'state', not self.volume.GetVisibility())
+        if make_visible: self.volume.VisibilityOn()
+        else: self.volume.VisibilityOff()
         self.render()
 
-    def toggleIsosurfaceVisibility(self):
+    def toggleIsosurfaceVisibility( self, **args ):
         if self.levelSetActor == None:
             self.buildIsosurfacePipeline()
-        isVisible = self.levelSetActor.GetVisibility()
-        if isVisible: 
+        make_visible = args.get( 'state', not self.levelSetActor.GetVisibility())
+        if make_visible:
+            self.levelSetActor.VisibilityOn() 
+        else: 
             self.levelSetActor.VisibilityOff()
             self.cursorActor.VisibilityOff()
-        else: 
-            self.levelSetActor.VisibilityOn()
+            
         self.render()
         
     def invokeKeyEvent(self, key, ctrl=0 ):
@@ -996,10 +1002,7 @@ class RectGridPlot(StructuredGridPlot):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         ctrl = eventArgs[2]
-        if   (  ( key == 'v' ) and not ctrl    ):   self.toggleVolumeVisibility()              
-#        elif (  ( key == 'p' ) and not ctrl    ):   self.toggleSliceVisibility() 
-        elif (  ( key == 's' ) and not ctrl    ):   self.toggleIsosurfaceVisibility() 
-        elif (  ( key == 'W' ) and ctrl        ): 
+        if (  ( key == 'W' ) and ctrl        ): 
             bbar = self.getInteractionButtons()  
             bbar.releaseSliders() 
             for index in range(3):  self.modifySlicePlaneVisibility( index, "xyz"[index], False )              
@@ -1241,9 +1244,9 @@ class RectGridPlot(StructuredGridPlot):
             if not self.planeWidgetX.MatchesBounds( bounds ):
                 self.planeWidgetX.PlaceWidget( bounds )        
                 self.planeWidgetY.PlaceWidget( bounds ) 
-        cf = self.getConfigFunction( 'zSlider' )
-        if cf: 
-            cf.scaleRange( zscale_data[0] )
+#         cf = self.getConfigFunction( 'zSlider' )
+#         if cf: 
+#             cf.scaleRange( zscale_data[0] )
         self.render()               
 
     def setInputZScale( self, zscale_data, **args  ):

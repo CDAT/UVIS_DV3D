@@ -34,6 +34,10 @@ class StructuredGridPlot(DV3DPlot):
         self.shapefilePolylineActors = {}
         self.basemapLineSpecs = {}
 
+    def processToggleClippingCommand( self, args, config_function ):
+        if args and args[0] == "InitConfig": 
+            self.toggleClipping( args[1] )
+
     def processVerticalScalingCommand( self, args, config_function ):
         verticalScale = config_function.value
         if args and args[0] == "StartConfig":
@@ -63,10 +67,7 @@ class StructuredGridPlot(DV3DPlot):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         md = self.getInputSpec().getMetadata()
-        if ( self.createColormap and ( key == 'b' ) ): 
-            self.toggleColorbarVisibility()                       
-            self.render() 
-        elif (  key == 'r'  ):
+        if (  key == 'r'  ):
             self.resetCamera()              
         elif ( md and ( md.get('plotType','')=='xyz' ) and ( key == 't' )  ):
             self.showInteractiveLens = not self.showInteractiveLens 
@@ -320,7 +321,7 @@ class StructuredGridPlot(DV3DPlot):
     def initializeConfiguration( self, cmap_index=0, **args ):
         ispec = self.inputSpecs[ cmap_index ] 
         args['units'] = ispec.units
-        DV3DPlot.initializeConfiguration( self, **args )
+        ButtonBarWidget.initializeConfigurations( **args )
         ispec.addMetadata( { 'colormap' : self.getColormapSpec(), 'orientation' : self.iOrientation } ) 
 #        self.updateSliceOutput()
 
@@ -559,12 +560,11 @@ class StructuredGridPlot(DV3DPlot):
         show = args.get( 'show', False )  
         n_cores = args.get( 'n_cores', 32 )    
         lut = self.getLUT()
-        if self.widget and show: self.widget.show()
+        self.variable_reader = StructuredDataReader( init_args )
+        self.variable_reader.execute( )       
         self.createRenderer()
         self.initCamera()
         interface = init_args[2]
-        self.variable_reader = StructuredDataReader( init_args )
-        self.variable_reader.execute( )       
         self.execute( )
         self.initializePlots()
 #        self.showConfigureButton()
@@ -585,17 +585,15 @@ class StructuredGridPlot(DV3DPlot):
             self.labelBuff = "%s (%s)\n%s" % ( var_name, var_units, str(text) )
         DV3DPlot.updateTextDisplay( self, None, render )
             
-    def toggleClipping(self):
-        if self.clipper.GetEnabled():   self.clipOff()
-        else:                           self.clipOn()
+    def toggleClipping(self, clipping_on ):
+        if clipping_on:   self.clipOn()
+        else:             self.clipOff()
         
     def clipOn(self):
-        if self.enableClip:
-            self.clipper.On()
-            self.executeClip()
+        self.clipper.On()
+        self.executeClip()
 
     def clipOff(self):
-        if self.enableClip:
-            self.clipper.Off()      
+        self.clipper.Off()      
         
         
