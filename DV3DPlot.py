@@ -115,6 +115,7 @@ class DV3DPlot():
         interactionButtons.addSliderButton( names=['VerticalScaling'], key='Z', toggle=True, label='Vertical Scaling', sliderLabels='Vertical Scale', interactionHandler=self.processVerticalScalingCommand, range_bounds=[ 0.1, 10.0 ], initValue= 1.0 )
         interactionButtons.addConfigButton( names=['ChooseColormap'], key='m', toggle=True, interactionHandler=self.processChooseColormapCommand, initValue=[ 'jet', False, False ]  )
         interactionButtons.addConfigButton( names=['ToggleClipping'], key='X', toggle=True, parents=['ToggleVolumePlot', 'ToggleSurfacePlot'], interactionHandler=self.processToggleClippingCommand  )
+        interactionButtons.addConfigButton( names=['Colorbar'], key='b', toggle=True, label='Show Colorbar', interactionHandler=self.processShowColorbarCommand )
 
     def processVerticalScalingCommand( self, args, config_function ):
         pass 
@@ -124,6 +125,11 @@ class DV3DPlot():
      
     def getRenderer(self):
         return self.renderWindow.GetRenderers().GetFirstRenderer ()
+
+    def processShowColorbarCommand( self, args, config_function = None ):
+        if args and args[0] == "InitConfig":
+            self.toggleColorbarVisibility(state=args[1])                       
+            self.render() 
         
     def processChooseColormapCommand( self, args, config_function ):
         from ListWidget import ColorbarListWidget
@@ -300,6 +306,12 @@ class DV3DPlot():
         self.clipper.AddObserver( 'EndInteractionEvent', self.endClip )
         self.clipper.AddObserver( 'InteractionEvent', self.executeClip )           
         self.clipOff() 
+
+    def clipOn(self):
+        pass
+
+    def clipOff(self):
+        pass
 
     def startClip( self, caller=None, event=None ):
         pass

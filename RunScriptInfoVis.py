@@ -8,6 +8,7 @@ import os, os.path, sys, argparse, time, multiprocessing
 from DistributedPointCollections import kill_all_zombies
 from Application import DV3D
 from MultiVarPointCollection import InterfaceType
+from ConfigurationFunctions import PlotType
 
 parser = argparse.ArgumentParser(description='DV3D Point Cloud Viewer')
 parser.add_argument( 'PATH' )
@@ -22,12 +23,12 @@ grid_coords = ( None, None, None, None )
 data_dir = os.path.expanduser( ns.data_dir )
 height_varnames = []
 var_proc_op = None
-interface = InterfaceType.InfoVis
+interface = InterfaceType.ClimatePointCloud
 roi = None # ( 0, 0, 50, 50 )
 
 
 if ns.data_type == "WRF":
-    data_file = os.path.join( data_dir, "WRF/wrfout_d01_2013-07-01_00-00-00.nc" )
+    data_file = os.path.join( data_dir, "WRF/wrfout_d01_2013-05-11_00-00-00.nc" )
     grid_file = None
     varnames = ["U", "V" ]        
 elif ns.data_type == "CAM":
@@ -66,5 +67,5 @@ elif ns.data_type == "CSU":
 
 g = DV3D(gui=False) 
 ncores=multiprocessing.cpu_count()
-g.init( init = ( grid_file, data_file, interface, varnames, grid_coords, var_proc_op, roi, 'xyz' ), n_overview_points=n_overview_points, n_cores=1, show=True  )   # n_cores = ncores      
+g.init( init = ( grid_file, data_file, interface, varnames, grid_coords, var_proc_op, roi, 'xyz' ), n_overview_points=n_overview_points, n_cores=1, show=True  ) #, plot_type = PlotType.List  )   # n_cores = ncores      
   

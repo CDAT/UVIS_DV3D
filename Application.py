@@ -27,7 +27,7 @@ class DV3D:
         var = df[ varnames[0] ]
         grid_metadata = var.getGrid()
 
-        plot_type = PlotType.getPointsLayout( grid_metadata )
+        plot_type = args.get( 'plot_type', PlotType.getPointsLayout( grid_metadata ) )
         
         if plot_type == PlotType.Grid:
             g = RectGridPlot(gui=self.use_gui) 

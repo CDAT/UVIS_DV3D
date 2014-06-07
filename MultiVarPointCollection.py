@@ -474,7 +474,7 @@ class MultiVarPointCollection():
             self.point_data_arrays[ 'lat' ] = self.point_data_arrays['y']                            
             self.setPointHeights( height_var=self.grid_coords[3], z_scale=z_scale )
             if self.lev <> None: 
-                self.metadata[ 'lev' ] = ( self.lev.long_name, self.lev.units, self.axis_bounds.get( 'z', None ) ) 
+                self.metadata[ 'lev' ] = ( self.lev.__dict__.get('long_name',self.lev.id), self.lev.units, self.axis_bounds.get( 'z', None ) ) 
                 self.point_data_arrays[ 'lev' ] = self.point_data_arrays['z'] 
             for varname in self.df.variables:
                 if ( self.interface == InterfaceType.InfoVis ) or ( varname == self.grid_varname ):

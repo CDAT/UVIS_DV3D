@@ -168,13 +168,20 @@ class CPCPlot( DV3DPlot ):
 #        self.resolutionCounter = Counter()
         self._current_subset_specs = {}
         self.sphere_source = None
-        self.vertVar = 'default'   
-        self.addConfigurableSliderFunction( 'pointSize', 'P', label='Point Size', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processPointSizeCommand, range_bounds=[ 1, 12 ], initValue=[ 5, 1 ] )
-        self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
-        self.addConfigurableSliderFunction( 'thresholding', 'T', label='Thresholding Range', interactionHandler=self.processThresholdRangeCommand )
-        self.addConfigurableSliderFunction( 'sliceProp', 'w', label='Slice Thickness', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processSlicePropertiesCommand, range_bounds=[ 0.001, 0.01 ], initValue=[ 0.0025, 0.005 ] )        
-        self.addConfigurableSliderFunction( 'opacityScale', 'o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
-        self.addConfigurableSliderFunction( 'slicing', 'p', label='Slicing', sliderLabels='Slice Position', interactionHandler=self.processSlicingCommand )
+        self.vertVar = 'default' 
+        
+        interactionButtons = self.getInteractionButtons()
+        interactionButtons.addSliderButton( names=['ScaleColormap'], key='C', toggle=True, label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
+        interactionButtons.addSliderButton( names=['ScaleTransferFunction'], key='T', toggle=True, parents=['ToggleVolumePlot'], label='Transfer Function Range', interactionHandler=self.processThresholdRangeCommand )
+        interactionButtons.addSliderButton( names=['ScaleOpacity'], key='o', toggle=True, label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
+#        interactionButtons.addSliderButton( names=['IsosurfaceValue'], key='L', toggle=True, parents=['ToggleSurfacePlot'], sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
+        interactionButtons.addSliderButton( names=['PointSize'], key='P', label='Point Size', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processPointSizeCommand, range_bounds=[ 1, 12 ], initValue=[ 5, 1 ] )
+        self.fetchPlotButtons()
+  
+#        self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
+#        self.addConfigurableSliderFunction( 'thresholding', 'T', label='Thresholding Range', interactionHandler=self.processThresholdRangeCommand )
+#        self.addConfigurableSliderFunction( 'sliceProp', 'w', label='Slice Thickness', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processSlicePropertiesCommand, range_bounds=[ 0.001, 0.01 ], initValue=[ 0.0025, 0.005 ] )        
+#        self.addConfigurableSliderFunction( 'opacityScale', 'o', label='Opacity Scale', range_bounds=[ 0.0, 1.0 ], initValue=[ 1.0, 1.0 ], interactionHandler=self.processOpacityScalingCommand )
         
      
 #        self.addConfigurableSliderFunction( 'slicing', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
@@ -311,10 +318,18 @@ class CPCPlot( DV3DPlot ):
         elif keysym == "A":  self.stepTime( False )
         elif keysym == "k":  self.toggleClipping()
         elif keysym == "m":  self.toggleRenderMode()
-        elif keysym == "v":  self.enableThresholding()
+#        elif keysym == "v":  self.enableThresholding()
 #        elif keysym == "i":  self.setPointIndexBounds( 5000, 7000 )
         else: return False
         return True
+    
+    def toggleVolumeVisibility( self, **args ):
+        self.enableThresholding( **args )
+        self.render()
+
+    def toggleIsosurfaceVisibility( self, **args ):
+        self.enableThresholding( **args )           
+        self.render()
                         
     def processCategorySelectionCommand( self, args ):
         op = args[0]
@@ -836,6 +851,9 @@ class CPCPlot( DV3DPlot ):
         if not self.partitioned_point_cloud.hasActiveCollections():
             self.render_mode = ProcessMode.LowRes
         self.render()
+        
+    def processIsosurfaceValueCommand(self, args, config_function ):
+        pass
 
     def processOpacityScalingCommand(self, args, config_function ):
         oscale = config_function.value
@@ -1159,6 +1177,10 @@ class CPCPlot( DV3DPlot ):
             
         self.start()
 
+    def initializeConfiguration( self, cmap_index=0, **args ):
+#        ispec = self.inputSpecs[ cmap_index ] 
+#        args['units'] = ispec.units
+        ButtonBarWidget.initializeConfigurations( **args )
 
     
 class QPointCollectionMgrThread( threading.Thread ):

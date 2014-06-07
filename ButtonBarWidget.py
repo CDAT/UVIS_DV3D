@@ -677,7 +677,7 @@ if __name__ == '__main__':
     renWin.AddRenderer(ren)
     iren = vtk.vtkRenderWindowInteractor()
     iren.SetRenderWindow(renWin)
-    iren.SetInteractorStyle( vtk.vtkInteractorStyleTrackballCamera() )
+    iren.SetInteractorStyle( NavigationInteractorStyle )
     ren.SetBackground( 1.0, 1.0, 1.0 )
     renWin.SetSize(1000,800)
     
