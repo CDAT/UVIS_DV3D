@@ -345,7 +345,7 @@ class RectGridPlot(StructuredGridPlot):
         self.render() 
 
     def initializePlots(self):
-        self.processKeyEvent( 'x' )
+        ButtonBarWidget.broadcastButtonState('Plot','XSlider')
         self.render()
 
     def getVolumeBounds( self, **args ):  

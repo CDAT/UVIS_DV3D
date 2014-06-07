@@ -198,6 +198,12 @@ class ButtonBarWidget:
         return cls.button_bars.get( name, None )
 
     @classmethod   
+    def broadcastButtonState( cls, type, name,  **args ):
+        bbar = cls.getButtonBar( type )
+        button = bbar.getButton( name )    
+        button.broadcastState( **args )    
+
+    @classmethod   
     def getButtonBars( cls ):
         return cls.button_bars.values()
 
@@ -332,7 +338,7 @@ class ButtonBarWidget:
         for b in self.buttons:
             if b.id == name: return b
         return None
-    
+
     def addButton( self, **args ):
         button = Button( self.interactor, **args )
         button.StateChangedSignal.connect( self.processStateChangeEvent )
