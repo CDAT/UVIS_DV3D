@@ -344,10 +344,6 @@ class RectGridPlot(StructuredGridPlot):
                     self.clipper.GetPlanes( self.clipPlanes )
         self.render() 
 
-    def initializePlots(self):
-        ButtonBarWidget.broadcastButtonState('Plot','XSlider')
-        self.render()
-
     def getVolumeBounds( self, **args ):  
         extent = args.get( "extent", self.input().GetExtent() )
         spacing = args.get( "spacing", self.input().GetSpacing() )

@@ -130,6 +130,10 @@ class DV3DPlot():
         if args and args[0] == "InitConfig":
             self.toggleColorbarVisibility(state=args[1])                       
             self.render() 
+
+    def initializePlots(self):
+        ButtonBarWidget.broadcastButtonState('Plot','XSlider')
+        self.render()
         
     def processChooseColormapCommand( self, args, config_function ):
         from ListWidget import ColorbarListWidget
