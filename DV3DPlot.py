@@ -132,7 +132,9 @@ class DV3DPlot():
             self.render() 
 
     def initializePlots(self):
-        ButtonBarWidget.broadcastButtonState('Plot','XSlider')
+        bbar = ButtonBarWidget.getButtonBar( 'Plot' )
+        button = bbar.getButton( 'XSlider' ) 
+        button.setButtonState( 1 )   
         self.render()
         
     def processChooseColormapCommand( self, args, config_function ):
@@ -384,7 +386,7 @@ class DV3DPlot():
         bbar_name = 'Plot'
         bbar = ButtonBarWidget( bbar_name, self.renderWindowInteractor, position=( 0.0, 0.96) )
         b = bbar.addConfigButton( names=['SliceRoundRobin'],  key='p', interactionHandler=bbar.sliceRoundRobin )
-        b = bbar.addSliderButton( names=['XSlider'],  key='x', toggle=True, group='SliceRoundRobin', state=1, sliderLabels='X Slice Position', label="Slicing", position=[0,3], interactionHandler=self.processSlicingCommand )
+        b = bbar.addSliderButton( names=['XSlider'],  key='x', toggle=True, group='SliceRoundRobin', sliderLabels='X Slice Position', label="Slicing", position=[0,3], interactionHandler=self.processSlicingCommand )
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
         b = bbar.addSliderButton( names=['YSlider'],  key='y', toggle=True, group='SliceRoundRobin', sliderLabels='Y Slice Position', label="Slicing", position=[1,3], interactionHandler=self.processSlicingCommand )
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
@@ -396,11 +398,11 @@ class DV3DPlot():
  
     def processSurfacePlotCommand( self, args, config_function = None ):
         if args[0] == "InitConfig": 
-            self.toggleIsosurfaceVisibility( state=args[1] ) 
+            self.toggleIsosurfaceVisibility( args, config_function ) 
 
     def processVolumePlotCommand( self, args, config_function = None ):
         if args[0] == "InitConfig": 
-            self.toggleVolumeVisibility( state=args[1] )  
+            self.toggleVolumeVisibility( args, config_function )  
     
     def fetchPlotButtons( self, show = False ):
         bbar_name = 'Plot'

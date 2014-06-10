@@ -192,6 +192,13 @@ class ButtonBarWidget:
         self.configurableFunctions = collections.OrderedDict()
         ButtonBarWidget.button_bars[ name ] = self
         self.updateWindowSize()
+        
+    def clear( self, **args ):
+        current_button_id = args.get( 'current', None )
+        for b in self.buttons:
+            if ( current_button_id == None ) or ( b.id <> current_button_id ):
+                if b.state <> 0:
+                    b.setButtonState( 0 )
      
     @classmethod   
     def getButtonBar( cls, name ):

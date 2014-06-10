@@ -951,18 +951,18 @@ class RectGridPlot(StructuredGridPlot):
 #        printArgs( "ResetCameraClippingRange", focal_point=f, cam_pos=p, vol_bounds=bounds )
         self.renderer.ResetCameraClippingRange() 
         
-    def toggleVolumeVisibility( self, **args ):
+    def toggleVolumeVisibility( self, args, config_function ):
         if self.volume == None:
             self.buildVolumePipeline()
-        make_visible = args.get( 'state', not self.volume.GetVisibility())
+        make_visible = args[1] # .get( 'state', not self.volume.GetVisibility())
         if make_visible: self.volume.VisibilityOn()
         else: self.volume.VisibilityOff()
         self.render()
 
-    def toggleIsosurfaceVisibility( self, **args ):
+    def toggleIsosurfaceVisibility( self, args, config_function ):
         if self.levelSetActor == None:
             self.buildIsosurfacePipeline()
-        make_visible = args.get( 'state', not self.levelSetActor.GetVisibility())
+        make_visible = args[1] # .get( 'state', not self.levelSetActor.GetVisibility())
         if make_visible:
             self.levelSetActor.VisibilityOn() 
         else: 

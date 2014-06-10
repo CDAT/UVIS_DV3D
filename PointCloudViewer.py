@@ -324,14 +324,20 @@ class CPCPlot( DV3DPlot ):
         else: return False
         return True
     
-    def toggleVolumeVisibility( self, **args ):
-        self.enableThresholding( **args )
+    def toggleVolumeVisibility( self, args, config_function ):
+        if (len(args) > 3):
+            button_bar = args[3]
+            button_bar.clear( current=config_function.name )
+        self.enableThresholding()
         self.render()
 
-    def toggleIsosurfaceVisibility( self, **args ):
-        self.enableThresholding( **args )           
+    def toggleIsosurfaceVisibility( self, args, config_function ):
+        if (len(args) > 3):
+            button_bar = args[3]
+            button_bar.clear( current=config_function.name )
+        self.enableThresholding()           
         self.render()
-                        
+                         
     def processCategorySelectionCommand( self, args ):
         op = args[0]
         if op == 'Subsets':
@@ -459,13 +465,18 @@ class CPCPlot( DV3DPlot ):
         elif args and args[0] == "EndConfig":
             positions = sliceParam.getValue( 'spos' )
             positions[self.sliceAxisIndex] = sliceParam.getValue()
+            print "Update slice value[%d]: %f " % ( self.sliceAxisIndex, sliceParam.getValue() )
             sliceParam.setValue( 'spos', positions )
             self.setRenderMode( ProcessMode.HighRes )            
             self.execCurrentSlice( )       
         elif args and args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
-            self.sliceAxisIndex =  ( self.sliceAxisIndex + 1 ) % 3 
+#            self.sliceAxisIndex =  ( self.sliceAxisIndex + 1 ) % 3 
+            self.sliceAxisIndex = config_function.position[0]
             self.clearSubsetting()
+            if (len(args) > 3) and args[1]:
+                button_bar = args[3]
+                button_bar.clear( current=config_function.name )
 #            self.clearInteractions()
             self.process_mode = ProcessMode.Slicing
             positions = sliceParam.getValue( 'spos' )
@@ -477,6 +488,7 @@ class CPCPlot( DV3DPlot ):
         elif args and args[0] == "UpdateConfig":
             self.sliceAxisIndex = args[1]
             value = args[2].GetValue()
+            print "Set slice value: ", float( value )
             sliceParam.setValue( 0, value )
             self.execCurrentSlice(spos=value)
     
