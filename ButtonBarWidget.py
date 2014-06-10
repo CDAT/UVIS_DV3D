@@ -294,11 +294,20 @@ class ButtonBarWidget:
             
     def processStateChangeEvent( self, button_id, key, state ):
         self.StateChangedSignal( button_id, key, state )
-        self.updateInteractionState( button_id, state  ) 
+        if state > 0: 
+            self.updateInteractionState( button_id, state  ) 
+        else:
+            b = self.getButton( button_id )
+            if not b.toggle: 
+                self.updateInteractionState( button_id, state  )                
+            else:
+                configFunct = self.configurableFunctions.get( button_id, None )
+                position_index = configFunct.getPosition() if configFunct else None
+                self.releaseSlider( position_index ) 
 #        config_function = self.configurableFunctions.get( button_id, None )
 #        if config_function: config_function.processStateChangeEvent( state )
 #        button = self.buttons.get( button_id, None )
-
+    
     def computeBounds( self, pos, size ):
         bds = [0.0]*6
         bds[0] = pos[0] - size[0] if self.origin[0] else pos[0]
@@ -452,7 +461,7 @@ class ButtonBarWidget:
         swidget.SetEnabled( 1 ) 
         self.currentSliders[index] = ( self.process_mode, self.InteractionState, swidget )
         
-    def releaseSlider( self, index ):        
+    def releaseSlider( self, index ):      
         ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )  
         if swidget: swidget.SetEnabled( 0 ) 
 

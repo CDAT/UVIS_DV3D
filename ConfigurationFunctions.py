@@ -420,6 +420,9 @@ class ConfigurableFunction:
         self._persisted = True
         self.interactionHandler = args.get( 'interactionHandler', None )
         
+    def getPosition(self):
+        return None
+        
     def processStateChangeEvent( self, state ):
         args = [ "InitConfig", state ]
         self.interactionHandler( args, self )
@@ -501,6 +504,9 @@ class ConfigurableSliderFunction( ConfigurableFunction ):
         if self.initial_value <> None:
             for index, value in enumerate( self.initial_value ):
                 self.value.setValue( index, value )
+                
+    def getPosition(self):
+        return self.position[0] if self.position else None
 
     def scaleRange( self, scale_factor ):
         if self._initial_range == None: 
