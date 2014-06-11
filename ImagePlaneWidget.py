@@ -696,12 +696,12 @@ class ImagePlaneWidget:
         
         # This method must be called _after_ SetInput
         #
+        self.Reslice.Update()
         self.ImageData  = self.Reslice.GetInput()
         if ( not self.ImageData ):        
             print>>sys.stderr, "SetInput() before setting plane orientation."
             return
                
-#        self.ImageData.Update()
         extent = self.ImageData.GetExtent()
         origin = self.ImageData.GetOrigin()
         spacing = self.ImageData.GetSpacing()
@@ -785,13 +785,23 @@ class ImagePlaneWidget:
         self.ResliceInterpolate = -1 # Force change
         self.SetResliceInterpolate(interpolate)
 
+        self.Texture.SetInterpolate(self.TextureInterpolate)
+        
+        self.UpdateSlice()
+
+
+    def UpdateSlice(self):
+        self.Reslice.Update()
         if vtk.VTK_MAJOR_VERSION <= 5:  self.ColorMap.SetInput(self.Reslice.GetOutput())
         else:                           self.ColorMap.SetInputData(self.Reslice.GetOutput())                   
-                
+        self.ColorMap.Update()        
         if vtk.VTK_MAJOR_VERSION <= 5:  self.Texture.SetInput(self.ColorMap.GetOutput())
         else:                           self.Texture.SetInputData(self.ColorMap.GetOutput())              
-               
-        self.Texture.SetInterpolate(self.TextureInterpolate)
+        self.Texture.Update() 
+        self.TexturePlaneActor.GetMapper().Update()  
+        
+        if self.Reslice2:           
+            self.Reslice2.Update()     
         
 #        self.SetPlaneOrientation(self.PlaneOrientation)
         
@@ -905,14 +915,18 @@ class ImagePlaneWidget:
             self.Reslice2.SetOutputSpacing(outputSpacingX, outputSpacingY, 1)
             self.Reslice2.SetOutputOrigin(0.5*outputSpacingX, 0.5*outputSpacingY, 0)
             self.Reslice2.SetOutputExtent(0, extentX-1, 0, extentY-1, 0, 0)
+             
+        self.UpdateSlice()
 
               
 #----------------------------------------------------------------------------
 
-    def GetResliceOutput(self):             
+    def GetResliceOutput(self):
+        self.Reslice.Update()             
         return self.Reslice.GetOutput()
 
     def GetReslice2Output(self):      
+        self.Reslice2.Update()             
         return self.Reslice2.GetOutput() if self.Reslice2 else None      
 
 #----------------------------------------------------------------------------
@@ -1091,6 +1105,7 @@ class ImagePlaneWidget:
          
         origin = self.ImageData.GetOrigin()
         spacing = self.ImageData.GetSpacing()
+        self.PlaneSource.Update()
         planeOrigin = self.PlaneSource.GetOrigin()
         
         if ( self.PlaneOrientation == 2 ):        
@@ -1274,6 +1289,7 @@ class ImagePlaneWidget:
 
 #----------------------------------------------------------------------------
     def GetTexture(self):
+        self.Texture.Update()
         return self.Texture
 
 #----------------------------------------------------------------------------
@@ -1344,10 +1360,11 @@ class ImagePlaneWidget:
         self.ColorMap.SetLookupTable(self.LookupTable)
         self.ColorMap.SetOutputFormatToRGBA()
         self.ColorMap.PassAlphaToOutputOn()
+        self.ColorMap.Update()
         
         texturePlaneMapper  = vtk.vtkPolyDataMapper()
         if vtk.VTK_MAJOR_VERSION <= 5:  texturePlaneMapper.SetInput( self.PlaneSource.GetOutput() )
-        else:                           texturePlaneMapper.SetInputData( self.PlaneSource.GetOutput() )             
+        else:                           texturePlaneMapper.SetInputData( self.PlaneSource.GetOutput() ) 
         
         self.Texture.SetQualityTo32Bit()
         self.Texture.MapColorScalarsThroughLookupTableOff()
@@ -1355,6 +1372,7 @@ class ImagePlaneWidget:
         self.Texture.RepeatOff()
         self.Texture.SetLookupTable(self.LookupTable)
         
+        texturePlaneMapper.Update()
         self.TexturePlaneActor.SetMapper(texturePlaneMapper)
         self.TexturePlaneActor.SetTexture(self.Texture)
         self.TexturePlaneActor.PickableOn()
@@ -1385,6 +1403,7 @@ class ImagePlaneWidget:
         if vtk.VTK_MAJOR_VERSION <= 5:  cursorMapper.SetInput(self.CursorPolyData)
         else:                           cursorMapper.SetInputData(self.CursorPolyData)                    
         cursorMapper.SetResolveCoincidentTopologyToPolygonOffset()
+        cursorMapper.Update()
         self.CursorActor.SetMapper(cursorMapper)
         self.CursorActor.PickableOff()
         self.CursorActor.VisibilityOff()

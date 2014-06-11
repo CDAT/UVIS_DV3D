@@ -639,7 +639,7 @@ class RectGridPlot(StructuredGridPlot):
         """ 
         
         texture_ispec = self.getInputSpec( 1 )                
-        xMin, xMax, yMin, yMax, zMin, zMax = self.input().GetWholeExtent()       
+        xMin, xMax, yMin, yMax, zMin, zMax = self.input().GetExtent()       
         self.sliceCenter = [ (xMax-xMin)/2, (yMax-yMin)/2, (zMax-zMin)/2  ]       
         spacing = self.input().GetSpacing()
         sx, sy, sz = spacing 
@@ -660,7 +660,8 @@ class RectGridPlot(StructuredGridPlot):
         if texture_ispec and texture_ispec.input():
             self.probeFilter = vtk.vtkProbeFilter()
             textureRange = texture_ispec.input().GetScalarRange()
-            self.probeFilter.SetSource( texture_ispec.input() )
+            if vtk.VTK_MAJOR_VERSION <= 5:  self.probeFilter.SetSource( texture_ispec.input() )
+            else:                           self.probeFilter.SetSourceData( texture_ispec.input() )
             self.generateTexture = True
 
         if (self.surfacePicker == None):           
@@ -712,7 +713,8 @@ class RectGridPlot(StructuredGridPlot):
         self.cursor.SetPhiResolution(8)
         
         mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInput(self.cursor.GetOutput())
+        if vtk.VTK_MAJOR_VERSION <= 5:  mapper.SetInput( self.cursor.GetOutput() )
+        else:                           mapper.SetInputData( self.cursor.GetOutput() ) 
         self.cursorActor.SetMapper(mapper)        
 #        self.createDefaultProperties() 
                                                                        
@@ -744,7 +746,7 @@ class RectGridPlot(StructuredGridPlot):
             bounds[i] = origin[io2] + spacing[io2]*extent[i] 
             
         print " @@@VolumeRenderer@@@   Data Type = %s, range = (%f,%f), max_scalar = %s" % ( dataType, rangeBounds[0], rangeBounds[1], self._max_scalar_value )
-        print "Extent: %s " % str( self.input().GetWholeExtent() )
+        print "Extent: %s " % str( self.input().GetExtent() )
         print "Spacing: %s " % str( spacing )
         print "Origin: %s " % str( origin )
         print "Dimensions: %s " % str( self.input().GetDimensions() )

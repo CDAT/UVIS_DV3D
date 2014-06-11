@@ -185,8 +185,7 @@ class ButtonBarWidget:
         self.orientation = args.get( 'orientation', Orientation.Vertical )
         self.position = args.get( 'position', ( 0.0, 1.0 ) )
         self.buffer = args.get( 'buffer', ( 3, 3 ) )
-        self.windowSizeRange = [ 200, 1200 ]
-        self.minScale = 0.3
+        self.fullButtonWindowSize = 1500
         self.buttons = []
         self.visible = False
         self.configurableFunctions = collections.OrderedDict()
@@ -254,13 +253,17 @@ class ButtonBarWidget:
             self.current_location = self.placeButton( button, self.current_location )
             
     def reposition( self, **args ):
-        print "Reposition: %d " % self.windowSize[0]
+#        print "Reposition: %d " % self.windowSize[0]
         self.updateWindowSize()
         self.build( **args )
              
     def placeButton( self, button, position, **args ):
         max_size = button.size()
-        scale = 1.0 if self.windowSize[0] > self.windowSizeRange[1] else float(self.windowSize[0])/self.windowSizeRange[1]
+        window_size = min( self.windowSize[0], self.windowSize[1] ) 
+        scale = float(window_size)/ self.fullButtonWindowSize
+        if scale > 1.0:   scale = 1.0
+        if scale < 0.2:   scale = 0.2
+        print "Resize: %d %s " % ( window_size, scale )
         size = [ max_size[0]*scale, max_size[1]*scale ]
         bounds = self.computeBounds( position, size )
         print " placeButton[%s]: bounds = %s" % ( button.id, str(bounds) )
@@ -304,6 +307,7 @@ class ButtonBarWidget:
                 configFunct = self.configurableFunctions.get( button_id, None )
                 position_index = configFunct.getPosition() if configFunct else None
                 self.releaseSlider( position_index ) 
+                configFunct.processInteractionEvent( [ "InitConfig", 0, False, self ] )
 #        config_function = self.configurableFunctions.get( button_id, None )
 #        if config_function: config_function.processStateChangeEvent( state )
 #        button = self.buttons.get( button_id, None )
