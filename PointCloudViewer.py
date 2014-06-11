@@ -214,7 +214,7 @@ class CPCPlot( DV3DPlot ):
 
     def processVolumePlotCommand( self, args, config_function = None ):
         volumeParam = config_function.value
-        DV3DPlot.processSurfacePlotCommand( self, args, config_function  )
+        DV3DPlot.processVolumePlotCommand( self, args, config_function  )
         if args and args[0] == "Init":
             vrange = self.point_cloud_overview.getValueRange()
             config_function.initial_value = vrange
@@ -345,19 +345,21 @@ class CPCPlot( DV3DPlot ):
         return True
     
     def toggleVolumeVisibility( self, args, config_function ):
-        if (len(args) > 3):
-            button_bar = args[3]
-            button_bar.clear( current=config_function.name )
-        self.enableThresholding( config_function.value )
-        self.render()
+        if len( args ) > 1 and args[1]:
+            if (len(args) > 3):
+                button_bar = args[3]
+                button_bar.clear( current=config_function.name )
+            self.enableThresholding( config_function.value )
+            self.render()
 
     def toggleIsosurfaceVisibility( self, args, config_function ):
-        if (len(args) > 3):
-            button_bar = args[3]
-            button_bar.clear( current=config_function.name )
-        trange = config_function.value.getValue( 'trange' )
-        self.enableThresholding( trange )           
-        self.render()
+        if len( args ) > 1 and args[1]:
+            if (len(args) > 3):
+                button_bar = args[3]
+                button_bar.clear( current=config_function.name )
+            trange = config_function.value.getValue( 'trange' )
+            self.enableThresholding( trange )           
+            self.render()
                          
     def processCategorySelectionCommand( self, args ):
         op = args[0]
@@ -469,7 +471,8 @@ class CPCPlot( DV3DPlot ):
     def defvar(self):
         return self.point_cloud_overview.point_collection.var.id 
     
-    def processSlicingCommand( self, args, config_function = None ):      
+    def processSlicingCommand( self, args, config_function = None ):  
+        print " Process Slicing Command: " , str( args )   
         sliceParam = config_function.value
         if args and args[0] == "StartConfig":            
             self.render_mode = ProcessMode.LowRes    
@@ -491,21 +494,20 @@ class CPCPlot( DV3DPlot ):
             self.setRenderMode( ProcessMode.HighRes )            
             self.execCurrentSlice( )       
         elif args and args[0] == "InitConfig":
-            self.updateTextDisplay( config_function.label )
-#            self.sliceAxisIndex =  ( self.sliceAxisIndex + 1 ) % 3 
-            self.sliceAxisIndex = config_function.position[0]
-            self.clearSubsetting()
-            if (len(args) > 3) and args[1]:
-                button_bar = args[3]
-                button_bar.clear( current=config_function.name )
-#            self.clearInteractions()
-            self.process_mode = ProcessMode.Slicing
-            positions = sliceParam.getValue( 'spos' )
-            spos = positions[ self.sliceAxisIndex ]
-            axis_bounds = sliceParam.getValue( 'bounds' )
-            config_function.setRangeBounds( axis_bounds[ self.sliceAxisIndex ] )
-            sliceParam.setValue( 0, spos )
-            self.execCurrentSlice( spos=spos )
+            if (len(args) > 1) and args[1]:
+                self.clearSubsetting()
+                if (len(args) > 3):
+                    button_bar = args[3]
+                    button_bar.clear( current=config_function.name )
+                self.sliceAxisIndex = config_function.position[0]
+                self.updateTextDisplay( config_function.label )
+                self.process_mode = ProcessMode.Slicing
+                positions = sliceParam.getValue( 'spos' )
+                spos = positions[ self.sliceAxisIndex ]
+                axis_bounds = sliceParam.getValue( 'bounds' )
+                config_function.setRangeBounds( axis_bounds[ self.sliceAxisIndex ] )
+                sliceParam.setValue( 0, spos )
+                self.execCurrentSlice( spos=spos )
         elif args and args[0] == "UpdateConfig":
             self.sliceAxisIndex = args[1]
             value = args[2].GetValue()
@@ -534,9 +536,9 @@ class CPCPlot( DV3DPlot ):
             self.setRenderMode( ProcessMode.HighRes )                
             self.updateThresholding()        
         elif args and args[0] == "InitConfig":
-                self.updateTextDisplay( config_function.label )
-                dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
-                volumeThresholdRange.setValues( volumeThresholdRange.getValue( dvar ) )
+            self.updateTextDisplay( config_function.label )
+            dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
+            volumeThresholdRange.setValues( volumeThresholdRange.getValue( dvar ) )
         elif args and args[0] == "Open":
             self.enableThresholding(volumeThresholdRange)
         elif args and args[0] == "Close":
@@ -651,7 +653,9 @@ class CPCPlot( DV3DPlot ):
         self.invalidate()
         self.clearSliceSpecs()
         ( rmin, rmax ) = slice_bounds[ self.render_mode ]
-        self.current_subset_specs[ self.sliceAxes[self.sliceAxisIndex] ] = ( self.sliceAxes[self.sliceAxisIndex], rmin, rmax, True )
+        subset_spec = ( self.sliceAxes[self.sliceAxisIndex], rmin, rmax, True )
+        self.current_subset_specs[ self.sliceAxes[self.sliceAxisIndex] ] = subset_spec
+        print " ExecCurrentSlice: %s " % str( subset_spec )
         if self.render_mode ==  ProcessMode.HighRes:
             self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=True )
         else:
@@ -782,8 +786,7 @@ class CPCPlot( DV3DPlot ):
                 self.updateTextDisplay( config_function.label )
         elif arg[0] == 'Init':
             for resolution in range(2):
-                pc = self.getPointCloud(resolution)
-                pc.setPointSize( config_function.initial_value[ resolution ] )
+                sliceProp.setValue( resolution, config_function.initial_value[ resolution ] ) 
         elif arg[0] == 'StartConfig':
             render_mode = arg[1]
             self.setRenderMode( render_mode )

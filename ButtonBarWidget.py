@@ -185,7 +185,7 @@ class ButtonBarWidget:
         self.orientation = args.get( 'orientation', Orientation.Vertical )
         self.position = args.get( 'position', ( 0.0, 1.0 ) )
         self.buffer = args.get( 'buffer', ( 3, 3 ) )
-        self.fullButtonWindowSize = 1500
+        self.fullButtonWindowSize = 1300
         self.buttons = []
         self.visible = False
         self.configurableFunctions = collections.OrderedDict()
@@ -263,10 +263,10 @@ class ButtonBarWidget:
         scale = float(window_size)/ self.fullButtonWindowSize
         if scale > 1.0:   scale = 1.0
         if scale < 0.2:   scale = 0.2
-        print "Resize: %d %s " % ( window_size, scale )
+#        print "Resize: %d %s " % ( window_size, scale )
         size = [ max_size[0]*scale, max_size[1]*scale ]
         bounds = self.computeBounds( position, size )
-        print " placeButton[%s]: bounds = %s" % ( button.id, str(bounds) )
+#        print " placeButton[%s]: bounds = %s" % ( button.id, str(bounds) )
         button.place( bounds )
         return self.getOffsetScreenPosition( size, position )
            
@@ -321,7 +321,6 @@ class ButtonBarWidget:
         return bds
     
     def show(self):
-        print "Show button bar ", self.name
         self.visible = True
         for button in self.buttons: button.On()
         
@@ -333,7 +332,6 @@ class ButtonBarWidget:
         return processed
  
     def hide(self):
-        print "Hide button bar ", self.name
         self.visible = False
         for button in self.buttons: button.Off()
             
@@ -586,7 +584,6 @@ class ButtonBarWidget:
                 
                 if (configFunct.type == 'slider'):
                     force_enable = args.get( 'enable', False )
-#                    self.slidersVisible = [ ( slider_index < len(configFunct.sliderLabels) ) for slider_index in range(4) ]
 
                     tvals = configFunct.value.getValues()
                     if initialize_config_state: 
@@ -612,6 +609,7 @@ class ButtonBarWidget:
                         else: self.releaseSlider( position_index )
                     else:
                         n_active_sliders = len( configFunct.sliderLabels )
+                        self.slidersVisible = [ ( slider_index < n_active_sliders ) for slider_index in range(4) ]
                         for slider_index in range(4):
                             if self.slidersVisible[ slider_index ]:
                                 self.commandeerSlider( slider_index, configFunct.sliderLabels[slider_index], configFunct.getRangeBounds(), tvals[slider_index]  )
@@ -663,12 +661,13 @@ class ButtonBarWidget:
         if len( child_button.parents ):
             if ( parent_name in child_button.parents ):
                 parent_button = ButtonBarWidget.findButton( parent_name )
-                if parent_button.state:     
-                    child_button.activate() 
-                    if child_button.id in parent_button.children:
-                        return True
-                else:                       
-                    child_button.deactivate()
+                if parent_button <> None: 
+                    if parent_button.state:     
+                        child_button.activate() 
+                        if child_button.id in parent_button.children:
+                            return True
+                    else:                       
+                        child_button.deactivate()
         return False
                 
     

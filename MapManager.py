@@ -48,7 +48,8 @@ class MapManager:
             self.sphere.SetThetaResolution( thetaResolution )
             self.sphere.SetPhiResolution( phiResolution )
             self.sphere.SetRadius( radius )   
-            self.sphere.SetEndTheta( 359.999 )    
+            self.sphere.SetEndTheta( 359.999 ) 
+            self.sphere.Update()   
             mesh = self.sphere.GetOutput()
             
             self.sphereTexmapper = vtk.vtkTextureMapToSphere()
