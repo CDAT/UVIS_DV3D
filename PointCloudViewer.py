@@ -201,6 +201,26 @@ class CPCPlot( DV3DPlot ):
 
 #         if etype == 11:
 #             self.printInteractionStyle('processTimerEvent')
+
+    def processSurfacePlotCommand( self, args, config_function = None ):
+        DV3DPlot.processSurfacePlotCommand( self, args, config_function  )
+        volumeParam = config_function.value
+        if args and args[0] == "Init":
+            vrange = self.point_cloud_overview.getValueRange()
+            config_function.initial_value = vrange
+            dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
+            volumeParam.setValue( 'range', vrange )
+            volumeParam.setValue( dvar, vrange )
+
+    def processVolumePlotCommand( self, args, config_function = None ):
+        volumeParam = config_function.value
+        DV3DPlot.processSurfacePlotCommand( self, args, config_function  )
+        if args and args[0] == "Init":
+            vrange = self.point_cloud_overview.getValueRange()
+            config_function.initial_value = vrange
+            dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
+            volumeParam.setValue( 'range', vrange )
+            volumeParam.setValue( dvar, vrange )
             
         
     @property
@@ -328,14 +348,15 @@ class CPCPlot( DV3DPlot ):
         if (len(args) > 3):
             button_bar = args[3]
             button_bar.clear( current=config_function.name )
-        self.enableThresholding()
+        self.enableThresholding( config_function.value )
         self.render()
 
     def toggleIsosurfaceVisibility( self, args, config_function ):
         if (len(args) > 3):
             button_bar = args[3]
             button_bar.clear( current=config_function.name )
-        self.enableThresholding()           
+        trange = config_function.value.getValue( 'trange' )
+        self.enableThresholding( trange )           
         self.render()
                          
     def processCategorySelectionCommand( self, args ):

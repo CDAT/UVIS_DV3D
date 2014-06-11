@@ -387,7 +387,8 @@ class StructuredGridPlot(DV3DPlot):
         image_reader.Update()
         baseImage = image_reader.GetOutput() 
         new_dims, scale = None, None
-        if dataPosition == None:    
+        if dataPosition == None: 
+            old_dims = baseImage.GetDimensions()   
             baseImage = self.RollMap( baseImage ) 
             new_dims = baseImage.GetDimensions()
             scale = [ 360.0/new_dims[0], 180.0/new_dims[1], 1 ]
@@ -427,7 +428,7 @@ class StructuredGridPlot(DV3DPlot):
         return os.path.join( self.data_dir, filename ) 
         
     def RollMap( self, baseImage ):
-        baseImage.Update()
+#        baseImage.Update()
         if self.world_cut  == self.map_cut: return baseImage
         baseExtent = baseImage.GetExtent()
         baseSpacing = baseImage.GetSpacing()
@@ -443,27 +444,36 @@ class StructuredGridPlot(DV3DPlot):
         
         extent[0:2] = [ x0, x0 + sliceCoord - 1 ]
         clip0 = vtk.vtkImageClip()
-        clip0.SetInput( baseImage )
+        if vtk.VTK_MAJOR_VERSION <= 5:  clip0.SetInput( baseImage )
+        else:                           clip0.SetInputData( baseImage )                
         clip0.SetOutputWholeExtent( extent[0], extent[1], extent[2], extent[3], extent[4], extent[5] )
         
         extent[0:2] = [ x0 + sliceCoord, x1 ]
         clip1 = vtk.vtkImageClip()
-        clip1.SetInput( baseImage )
+        if vtk.VTK_MAJOR_VERSION <= 5:  clip1.SetInput( baseImage )
+        else:                           clip1.SetInputData( baseImage )                
         clip1.SetOutputWholeExtent( extent[0], extent[1], extent[2], extent[3], extent[4], extent[5] )
         
+        clip0.Update()
+        clip1.Update()
         append = vtk.vtkImageAppend()
         append.SetAppendAxis( 0 )
-        append.AddInput( clip1.GetOutput() )          
-        append.AddInput( clip0.GetOutput() )
-        
+        if vtk.VTK_MAJOR_VERSION <= 5:
+            append.AddInput( clip1.GetOutput() )          
+            append.AddInput( clip0.GetOutput() )
+        else:
+            append.SetInputData (0, clip1.GetOutput() )
+            append.SetInputData (1, clip0.GetOutput() )
+           
+        append.Update()
         imageInfo = vtk.vtkImageChangeInformation()
         imageInfo.SetInputConnection( append.GetOutputPort() ) 
         imageInfo.SetOutputOrigin( 0.0, 0.0, 0.0 )
         imageInfo.SetOutputExtentStart( 0, 0, 0 )
         imageInfo.SetOutputSpacing( baseSpacing[0], baseSpacing[1], baseSpacing[2] )
         
+        imageInfo.Update()
         result = imageInfo.GetOutput() 
-        result.Update()
         return result
 
     def NormalizeMapLon( self, lon ): 

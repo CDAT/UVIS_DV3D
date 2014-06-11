@@ -815,7 +815,7 @@ class RectGridPlot(StructuredGridPlot):
         # The 3 image plane widgets are used to probe the dataset.    
 #        print " Volume Slicer buildPipeline, id = %s " % str( id(self) )
         self.sliceOutput = vtk.vtkImageData()  
-        xMin, xMax, yMin, yMax, zMin, zMax = primaryInput.GetWholeExtent()       
+        xMin, xMax, yMin, yMax, zMin, zMax = primaryInput.GetExtent()       
         self.slicePosition = [ (xMax-xMin)/2, (yMax-yMin)/2, (zMax-zMin)/2  ]       
         dataType = primaryInput.GetScalarTypeAsString()
         bounds = list(primaryInput.GetBounds()) 
@@ -882,7 +882,7 @@ class RectGridPlot(StructuredGridPlot):
 #            colormapManager = self.getColormapManager()
             self.generateContours = True   
             self.contours = vtk.vtkContourFilter()
-            self.contours.GenerateValues( self.NumContours, rangeBounds[0], rangeBounds[1] )
+            self.contours.GenerateValues( int(self.NumContours), rangeBounds[0], rangeBounds[1] )
      
             self.contourLineMapperer = vtk.vtkPolyDataMapper()
             self.contourLineMapperer.SetInputConnection( self.contours.GetOutputPort() )
@@ -1479,10 +1479,10 @@ class RectGridPlot(StructuredGridPlot):
                     if self.generateContours:
                         slice_data = caller.GetReslice2Output()
                         if slice_data:
-                            slice_data.Update()    
                             iextent =  slice_data.GetExtent()            
-                            ispacing =  slice_data.GetSpacing()            
-                            self.contours.SetInput( slice_data )
+                            ispacing =  slice_data.GetSpacing() 
+                            if vtk.VTK_MAJOR_VERSION <= 5:  self.contours.SetInput( slice_data )
+                            else:                           self.contours.SetInputData( slice_data )                                    
                             self.contours.Modified()
                             origin = caller.GetOrigin()
                             contourLineActor = self.getContourActor( iAxis )
