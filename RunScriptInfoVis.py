@@ -13,7 +13,7 @@ from ConfigurationFunctions import PlotType
 parser = argparse.ArgumentParser(description='DV3D Point Cloud Viewer')
 parser.add_argument( 'PATH' )
 parser.add_argument( '-d', '--data_dir', dest='data_dir', nargs='?', default="~/data", help='input data dir')
-parser.add_argument( '-t', '--data_type', dest='data_type', nargs='?', default="GEOS5", help='input data type')
+parser.add_argument( '-t', '--data_type', dest='data_type', nargs='?', default="CAM", help='input data type')
 ns = parser.parse_args( sys.argv )
 
 kill_all_zombies()
@@ -66,7 +66,7 @@ elif ns.data_type == "CSU":
     varnames = [ "pressure" ] 
 
 g = DV3D() 
-ncores=multiprocessing.cpu_count()
+ncores = multiprocessing.cpu_count() - 1
 g.init( init = ( grid_file, data_file, interface, varnames, grid_coords, var_proc_op, roi, 'xyz' ), n_overview_points=n_overview_points, n_cores=ncores, blocking=True  ) #, plot_type = PlotType.List  ) 
 
 rw = g.getRenderWindow() 

@@ -397,6 +397,13 @@ class ButtonBarWidget:
             srep = swidget.GetRepresentation( )   
             srep.SetValue( value  )
             
+    def centerSlider( self, index ):
+        ( process_mode, interaction_state, swidget ) = self.currentSliders.get( index, ( None, None, None ) )
+        if swidget:
+            srep = swidget.GetRepresentation( )  
+            value = ( srep.GetMinimumValue() + srep.GetMaximumValue() ) / 2.0 
+            srep.SetValue( value  ) 
+                    
     def createSliderWidget( self, index ): 
         sliderRep = vtk.vtkSliderRepresentation2D()
             

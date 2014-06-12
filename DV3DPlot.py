@@ -135,7 +135,8 @@ class DV3DPlot():
     def initializePlots(self):
         bbar = ButtonBarWidget.getButtonBar( 'Plot' )
         button = bbar.getButton( 'XSlider' ) 
-        button.setButtonState( 1 )   
+        button.setButtonState( 1 ) 
+        bbar.centerSlider(0)  
         self.render()
         
     def processChooseColormapCommand( self, args, config_function ):
@@ -174,7 +175,7 @@ class DV3DPlot():
         return 0
         
     def processTimerEvent(self, caller, event):
-        id0 = caller.GetTimerEventId ()
+#        id0 = caller.GetTimerEventId ()
         return 0
 #         id1 = caller.GetTimerEventType ()
 #         id2 = caller.GetTimerEventPlatformId ()
@@ -393,7 +394,7 @@ class DV3DPlot():
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
         b = bbar.addSliderButton( names=['ZSlider'],  key='z', toggle=True, group='SliceRoundRobin', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
-#        b = bbar.addConfigButton( names=['ToggleSurfacePlot'],  key='s', children=['IsosurfaceValue'], toggle=True, interactionHandler=self.processSurfacePlotCommand )
+#        b = bbar.addConfigButton( names=['ToggleSurfacePlot'],  key='S', children=['IsosurfaceValue'], toggle=True, interactionHandler=self.processSurfacePlotCommand )
         b = bbar.addConfigButton( names=['ToggleVolumePlot'], key='v', children=['ScaleTransferFunction'], toggle=True, interactionHandler=self.processVolumePlotCommand )
         bbar.build()
  

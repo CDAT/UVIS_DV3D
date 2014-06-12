@@ -177,7 +177,8 @@ class CPCPlot( DV3DPlot ):
 #        interactionButtons.addSliderButton( names=['IsosurfaceValue'], key='L', toggle=True, parents=['ToggleSurfacePlot'], sliderLabels='Isosurface Value', label='Positioning Isosurface', interactionHandler=self.processIsosurfaceValueCommand )
         interactionButtons.addSliderButton( names=['PointSize'], key='P', label='Point Size', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processPointSizeCommand, range_bounds=[ 1, 12 ], initValue=[ 5, 1 ] )
         interactionButtons.addSliderButton( names=['SliceThickness'], key='w', label='Slice Thickness', sliderLabels=['Low Resolution', 'High Resolution' ], interactionHandler=self.processSlicePropertiesCommand, range_bounds=[  0.001, 0.01], initValue=[ 0.0025, 0.005 ] )
-        self.fetchPlotButtons()
+        interactionButtons.addConfigButton( names=['ToggleSphericalProj'], key='s', toggle=True, interactionHandler=self.processProjectionCommand )
+        plotButtons = self.fetchPlotButtons()
   
 #        self.addConfigurableSliderFunction( 'colorScale', 'C', label='Colormap Scale', interactionHandler=self.processColorScaleCommand )
 #        self.addConfigurableSliderFunction( 'thresholding', 'T', label='Thresholding Range', interactionHandler=self.processThresholdRangeCommand )
@@ -189,6 +190,12 @@ class CPCPlot( DV3DPlot ):
 #        self.addConfigurableLevelingFunction( 'map_opacity', 'M', label='Base Map Opacity', rangeBounds=[ 0.0, 1.0 ],  setLevel=self.setMapOpacity, activeBound='min',  getLevel=self.getMapOpacity, isDataValue=False, layerDependent=True, group=ConfigGroup.BaseMap, bound = False )
 
                  
+    def toggleProjection( self, args, config_function  ):
+        if len( args ) > 1: 
+            self.toggleTopo( state = args[1] ) 
+        else: 
+            self.toggleTopo() 
+        
     def processTimerEvent(self, caller, event):
         DV3DPlot.processTimerEvent(self, caller, event)
         eid = caller.GetTimerEventId ()
@@ -311,8 +318,9 @@ class CPCPlot( DV3DPlot ):
                     tseries = self.partitioned_point_cloud.getTimeseries( actor, iPt ) 
                     self.configDialog.pointPicked( tseries, pick_pos )       
             
-    def toggleTopo(self):
-        self.topo = ( self.topo + 1 ) % 2
+    def toggleTopo( self, **args ):
+        state = args.get( 'state', None )
+        self.topo = ( self.topo + 1 ) % 2 if (state == None) else state
         self.updateProjection()
         
     def updateProjection(self):
@@ -334,8 +342,7 @@ class CPCPlot( DV3DPlot ):
     def onKeyEvent(self, eventArgs ):
         key = eventArgs[0]
         keysym =  eventArgs[1]            
-        if   keysym == "s":  self.toggleTopo()
-        elif keysym == "t":  self.stepTime()
+        if keysym == "t":  self.stepTime()
         elif keysym == "A":  self.stepTime( False )
         elif keysym == "k":  self.toggleClipping()
         elif keysym == "m":  self.toggleRenderMode()
@@ -349,7 +356,6 @@ class CPCPlot( DV3DPlot ):
             if (len(args) > 3):
                 button_bar = args[3]
                 button_bar.clear( current=config_function.name )
-            self.enableThresholding( config_function.value )
             self.render()
 
     def toggleIsosurfaceVisibility( self, args, config_function ):
@@ -357,8 +363,6 @@ class CPCPlot( DV3DPlot ):
             if (len(args) > 3):
                 button_bar = args[3]
                 button_bar.clear( current=config_function.name )
-            trange = config_function.value.getValue( 'trange' )
-            self.enableThresholding( trange )           
             self.render()
                          
     def processCategorySelectionCommand( self, args ):
@@ -539,6 +543,7 @@ class CPCPlot( DV3DPlot ):
             self.updateTextDisplay( config_function.label )
             dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
             volumeThresholdRange.setValues( volumeThresholdRange.getValue( dvar ) )
+            self.enableThresholding( volumeThresholdRange )
         elif args and args[0] == "Open":
             self.enableThresholding(volumeThresholdRange)
         elif args and args[0] == "Close":
@@ -766,7 +771,7 @@ class CPCPlot( DV3DPlot ):
             pc.refresh(True) 
             self.render() 
         elif arg and arg[0] == "UpdateConfig": 
-            value = arg[2].getValue()
+            value = arg[2].GetValue()
             resolution = arg[1]
             current_point_size = pointSize.getValue( resolution )  
             new_point_size = int( round( value ) )
@@ -807,7 +812,7 @@ class CPCPlot( DV3DPlot ):
             self.render() 
         elif arg and arg[0] == "UpdateConfig": 
             resolution = arg[1]
-            new_slice_width = arg[2].getValue()
+            new_slice_width = arg[2].GetValue()
             sliceWidth = sliceProp.getValue( resolution ) 
             if sliceWidth <> new_slice_width:
                 sliceProp.setValue( resolution, new_slice_width )
@@ -961,8 +966,12 @@ class CPCPlot( DV3DPlot ):
         self.point_cloud_overview.generateZScaling( spec=scaling_spec )
         self.setRenderMode( ProcessMode.HighRes )
         self.render() 
+
+    def processProjectionCommand( self, args, config_function  ): 
+        if args and args[0] == "InitConfig": 
+            self.toggleProjection( args, config_function )
                 
-    def processProjectionCommand( self, args=None ):
+    def processSelectedProjection( self ):
         seleted_projection = self.projection.getValue('selected')
         projections = self.projection.getValue('choices',[])
         try:
@@ -1172,7 +1181,7 @@ class CPCPlot( DV3DPlot ):
 #                text = ' '.join( [ "%s: (%f, %f )" % (rng_val[0], rng_val[1], rng_val[2] )  for rng_val in trngs.values() ] )
 #                text = " Thresholding Range[%d]: ( %.3f, %.3f )\n Colormap Range: %s " % ( pcIndex, trng[0], trng[1], str( self.scalarRange.getRange() ) )
 #                self.updateTextDisplay( text )
-#            print " Subproc[%d]-. new Thresholding Data Available: %s " % ( pcIndex, str( pc.getThresholdingRange() ) ); sys.stdout.flush()
+            print " Subproc[%d]-. new Thresholding Data Available: %s " % ( pcIndex, str( pc.getThresholdingRanges() ) ); sys.stdout.flush()
     #        self.reset( ) # pcIndex )
             self.render() 
                           

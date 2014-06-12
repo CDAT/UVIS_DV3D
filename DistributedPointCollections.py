@@ -693,6 +693,7 @@ class vtkPartitionedPointCloud:
         self.nActiveCollections =  self.nPartitions 
         self.current_spec = {}
         self.timerId = -1
+        self.subproc_responses = 0
 #        self.proc_timer = threading.Timer( 0.1, self.processProcQueue )
         for pcIndex in range( self.nPartitions ):
             pc = vtkSubProcPointCloud( pcIndex, nPartitions )
@@ -727,6 +728,7 @@ class vtkPartitionedPointCloud:
         if self.timerId <> -1:
             self.interactor.DestroyTimer( self.timerId )
             self.timerId = -1
+            self.subproc_responses = 0
 #         print "stopCheckingProcQueues: InteractionStyle = %s " % (  self.interactor.GetInteractorStyle().__class__.__name__ ) 
 #         self.interactor.SetInteractorStyle( vtk.vtkInteractorStyleTrackballCamera() )
         
@@ -734,8 +736,10 @@ class vtkPartitionedPointCloud:
 #         if event.timerId() == self.dataQueueTimer: self.checkProcQueues()
         
     def processProcQueue(self):
+#        print "---> processProcQueue: [%d] items" %  len( self.point_clouds ) 
         for pc_item in self.point_clouds.items():
             rv = pc_item[1].processResults()
+#            print "---> processResults [%d]:  %s" % ( pc_item[0], str(rv) )
             if rv <> ExecutionDataPacket.NONE:
                 return pc_item, rv 
         return None, None
@@ -747,8 +751,11 @@ class vtkPartitionedPointCloud:
     def checkProcQueues(self):
         pc_item, rv = self.processProcQueue()
         if rv:
+#            print "---> CheckProcQueues: NewDataAvailable ( %s, %s )" % ( str(pc_item[0]), str(rv) )
             self.NewDataAvailable( pc_item[0], rv )
-            self.stopCheckingProcQueues()
+            self.subproc_responses = self.subproc_responses + 1
+            if self.subproc_responses == len( self.point_clouds ): 
+                self.stopCheckingProcQueues()
             pc_item[1].show()
             return True
         return False
