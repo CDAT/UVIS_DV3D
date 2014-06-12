@@ -13,11 +13,8 @@ from ConfigurationFunctions import PlotType
 class DV3D:
     
     def __init__( self, **args ):
-        self.use_gui = args.get( 'gui', False )
-        if self.use_gui: self.initGui()
-        
-    def initGui(self):
-        pass
+        self.plot = None
+    
     
     def init(self, **args ):
         
@@ -30,11 +27,12 @@ class DV3D:
         plot_type = args.get( 'plot_type', PlotType.getPointsLayout( grid_metadata ) )
         
         if plot_type == PlotType.Grid:
-            g = RectGridPlot(gui=self.use_gui) 
-#            g = SlicePlot(gui=self.use_gui)            
-#            g = VolumePlot(gui=self.use_gui) 
-            g.init( **args ) 
+            self.plot = RectGridPlot(**args) 
+            self.plot.init( **args ) 
         else:
-            g = CPCPlot(gui=self.use_gui) 
-            g.init( **args  )                  
+            self.plot = CPCPlot(**args) 
+            self.plot.init( **args  ) 
+            
+    def getRenderWindow(self):
+        return self.plot.renderWindow                 
         

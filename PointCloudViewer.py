@@ -1192,7 +1192,6 @@ class CPCPlot( DV3DPlot ):
         init_args = args[ 'init' ]      
         n_overview_points = args.get( 'n_overview_points', 500000 )    
         n_subproc_points = args.get( 'n_subproc_points', 500000 )  
-        show = args.get( 'show', False )  
         n_cores = args.get( 'n_cores', 32 )    
         self.point_cloud_overview = vtkLocalPointCloud( 0, max_points=n_overview_points ) 
         lut = self.getLUT()

@@ -88,7 +88,8 @@ class DV3DPlot():
         self.labelBuff = ""
         self.textDisplayMgr = None
         self.useGui = args.get( 'gui', True )
-        self.renderWindow = args.get( 'renwin', self.createRenderWindow() )
+        blocking = args.get( 'blocking', False )
+        self.renderWindow = args.get( 'renwin', self.createRenderWindow( blocking ) )
         self.renderWindowInteractor = self.renderWindow.GetInteractor()
         self.renderWindowInteractor.SetInteractorStyle( NavigationInteractorStyle )
         self.cameraOrientation = {}
@@ -474,11 +475,11 @@ class DV3DPlot():
             target.RemoveAllObservers()
         self.observerTargets.clear()
 
-    def createRenderWindow(self):
+    def createRenderWindow( self, blocking = False ):
         self.renderer = vtk.vtkRenderer()
         renWin = vtk.vtkRenderWindow()
         renWin.AddRenderer( self.renderer )
-        self.renderWindowInteractor = vtk.vtkRenderWindowInteractor()
+        self.renderWindowInteractor = vtk.vtkRenderWindowInteractor() if blocking else vtk.vtkGenericRenderWindowInteractor()
         self.renderWindowInteractor.SetRenderWindow(renWin)            
         return renWin
     

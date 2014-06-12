@@ -567,7 +567,6 @@ class StructuredGridPlot(DV3DPlot):
 
     def init(self, **args ):
         init_args = args[ 'init' ]      
-        show = args.get( 'show', False )  
         n_cores = args.get( 'n_cores', 32 )    
         lut = self.getLUT()
         self.variable_reader = StructuredDataReader( init_args )
