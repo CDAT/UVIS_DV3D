@@ -576,9 +576,7 @@ class StructuredGridPlot(DV3DPlot):
         interface = init_args[2]
         self.execute( )
         self.initializePlots()
-#        self.showConfigureButton()
         self.start()
-#        if self.useGui: self.createConfigDialog( show, self.processConfigCmd, interface )
 
     def onResizeEvent(self):
         self.updateTextDisplay( None, True )

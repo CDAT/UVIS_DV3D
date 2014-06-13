@@ -507,9 +507,6 @@ class ButtonBarWidget:
         if ( self.InteractionState <> None ): 
             config_function = self.getConfigFunction( self.InteractionState )
             config_function.processInteractionEvent( [ "StartConfig", slider_index ] )  
-#         else:   
-#             if self.process_mode == ProcessMode.Slicing:
-#                 self.setRenderMode( ProcessMode.LowRes )
                 
     def checkInteractionState( self, obj, event ):
         for item in self.currentSliders.items():

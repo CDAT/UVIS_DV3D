@@ -276,8 +276,8 @@ class MultiVarPointCollection():
         self.vertical_bounds =  ( 0.0, stage_height )  
         self.axis_bounds[ 'z' ] = self.vertical_bounds
         
-    def getAxisBounds( self, axis ): 
-        return self.axis_bounds[ axis ]                 
+    def getAxisBounds( self, axis=None ): 
+        return self.getBounds() if ( axis == None ) else self.axis_bounds[ axis ]                 
 
     def computePoints( self, **args ):
         nz = len( self.lev ) if self.lev else 1

@@ -90,7 +90,7 @@ class SlicePlot(StructuredGridPlot):
         elif args and args[0] == "Close":
             pass
         elif args and args[0] == "UpdateConfig":
-            print "Process Slicing Command: ", str( args )
+#            print "Process Slicing Command: ", str( args )
             plane_widget.SetSlicePosition( args[2] )
 
     def processOpacityScalingCommand( self, args, config_function = None ):

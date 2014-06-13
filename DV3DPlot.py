@@ -85,9 +85,9 @@ class DV3DPlot():
     sliceAxes = [ 'x', 'y', 'z' ]       
  
     def __init__( self,  **args ):
+        self.useDepthPeeling = False
         self.labelBuff = ""
         self.textDisplayMgr = None
-        self.useGui = args.get( 'gui', True )
         blocking = args.get( 'blocking', False )
         self.renderWindow = args.get( 'renwin', self.createRenderWindow( blocking ) )
         self.renderWindowInteractor = self.renderWindow.GetInteractor()
@@ -99,7 +99,6 @@ class DV3DPlot():
         self.xwidth = 300.0
         self.ycenter = 0.0
         self.ywidth = 180.0
-        self.gui_visibility = 0
         
         self.configuring = False
         self.configurationInteractorStyle = vtk.vtkInteractorStyleUser()
@@ -479,6 +478,13 @@ class DV3DPlot():
     def createRenderWindow( self, blocking = False ):
         self.renderer = vtk.vtkRenderer()
         renWin = vtk.vtkRenderWindow()
+       
+        if self.useDepthPeeling:
+            self.renderer.UseDepthPeelingOn( )
+            self.renderer.SetOcclusionRatio( 0.2 )       
+            renWin.SetAlphaBitPlanes( 1 )
+            renWin.SetMultiSamples( 0 )
+        
         renWin.AddRenderer( self.renderer )
         self.renderWindowInteractor = vtk.vtkRenderWindowInteractor() if blocking else vtk.vtkGenericRenderWindowInteractor()
         self.renderWindowInteractor.SetRenderWindow(renWin)            

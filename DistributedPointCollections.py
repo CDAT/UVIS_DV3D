@@ -433,6 +433,23 @@ class vtkPointCloud():
 #                b[4] = b[4] - 100.0
 #                b[5] = b[5] + 100.0
             return b
+
+    def getAxisBounds( self, **args ):
+        return list( self.grid_bounds )
+#         topo = args.get( 'topo', self.topo )
+#         lev = args.get( 'lev', None )
+#         if topo == PlotType.Spherical:
+#             return [ 0.0, 360.0, -90.0, 90.0, -self.earth_radius, self.earth_radius ]
+#         else:
+#             b = list( self.grid_bounds )
+# #            if lev:
+# #                lev_bounds = ( lev[0], lev[-1] )
+# #                b[4] = lev_bounds[0] if ( lev_bounds[0] < lev_bounds[1] ) else lev_bounds[1]
+# #                b[5] = lev_bounds[1] if ( lev_bounds[0] < lev_bounds[1] ) else lev_bounds[0]
+# #            elif ( b[4] == b[5] ):
+# #                b[4] = b[4] - 100.0
+# #                b[5] = b[5] + 100.0
+#             return b
                 
     def setClipping( self, clippingPlanes ):
         self.mapper.SetClippingPlanes( clippingPlanes )
@@ -624,7 +641,7 @@ class vtkLocalPointCloud( vtkPointCloud ):
         op_specs = [ 'points' ] + list( z_subset_spec )
         self.point_collection.execute( op_specs ) 
         self.setPointHeights( self.point_collection.getPointHeights()  )   
-        self.grid_bounds = self.point_collection.getBounds()
+        self.grid_bounds = self.point_collection.getAxisBounds()
 #        print "generateZScaling: Set grid bounds: %s " % str( self.grid_bounds )
         self.polydata.Modified()
         self.mapper.Modified()
@@ -665,7 +682,7 @@ class vtkLocalPointCloud( vtkPointCloud ):
         self.createPolydata( **args )
         self.vardata = self.point_collection.getVarData()
         self.updateScalars() 
-        self.grid_bounds = self.point_collection.getBounds()
+        self.grid_bounds = self.point_collection.getAxisBounds()
 #        print "initialize: Set grid bounds: %s " % str( self.grid_bounds )
         self.nlevels = self.point_collection.getNLevels()
         self.actor.VisibilityOff()
@@ -710,6 +727,7 @@ class vtkPartitionedPointCloud:
             self.interactor.SetTimerEventId(self.CheckProcQueueEventId)
             self.interactor.SetTimerEventType( self.TimerType )
             self.timerId = self.interactor.CreateRepeatingTimer( 100 )
+#            print " ** start CheckingProcQueues ** "
             
     def refresh( self, force = False ): 
         for pc in self.point_clouds.values():
@@ -729,6 +747,13 @@ class vtkPartitionedPointCloud:
             self.interactor.DestroyTimer( self.timerId )
             self.timerId = -1
             self.subproc_responses = 0
+            self.clearQueues()
+#            print " ** stop CheckingProcQueues ** "
+            
+    def clearQueues(self):
+        for pc_item in self.point_clouds.items():  
+            pc_item[1].clearQueues()    
+            
 #         print "stopCheckingProcQueues: InteractionStyle = %s " % (  self.interactor.GetInteractorStyle().__class__.__name__ ) 
 #         self.interactor.SetInteractorStyle( vtk.vtkInteractorStyleTrackballCamera() )
         
@@ -780,6 +805,7 @@ class vtkPartitionedPointCloud:
         return (self.nActiveCollections > 0)
             
     def clear(self, activePCIndex = -1 ):
+        self.stopCheckingProcQueues() 
         for pc_item in self.point_clouds.items():
             if pc_item[0] <> activePCIndex:
                 pc_item[1].hide()

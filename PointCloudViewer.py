@@ -162,8 +162,8 @@ class CPCPlot( DV3DPlot ):
         self.nlevels = None
         self.render_mode = ProcessMode.HighRes
         self.colorRange = 0 
-        self.thresholdCmdIndex = 0
-        self.thresholdingSkipFactor = 3
+        self.cmdSkipIndex = 0
+        self.cmdSkipFactor = 3
         self.deactivate_low_res_actor = False
 #        self.resolutionCounter = Counter()
         self._current_subset_specs = {}
@@ -204,7 +204,8 @@ class CPCPlot( DV3DPlot ):
             if self.partitioned_point_cloud.processTimerEvent(eid):
                 if self.deactivate_low_res_actor:
                     self.low_res_actor.VisibilityOff()
-                    self.deactivate_low_res_actor = True
+                    self.deactivate_low_res_actor = False
+#                    print " ** deactivate_low_res_actor ** "
 
 #         if etype == 11:
 #             self.printInteractionStyle('processTimerEvent')
@@ -256,6 +257,8 @@ class CPCPlot( DV3DPlot ):
         return [ self.point_cloud_overview, self.partitioned_point_cloud ]
        
     def setRenderMode( self, render_mode ): 
+        modes = [ 'lowres', 'highres' ]
+        print " Set render mode: ", modes[render_mode]
         if (render_mode == ProcessMode.HighRes):
             if ( self.partitioned_point_cloud == None ): return 
             if not self.partitioned_point_cloud.hasActiveCollections(): return            
@@ -263,9 +266,10 @@ class CPCPlot( DV3DPlot ):
         if render_mode ==  ProcessMode.HighRes:
             self.deactivate_low_res_actor = True
         else: 
-            if self.partitioned_point_cloud: 
+            if self.partitioned_point_cloud:
                 self.partitioned_point_cloud.clear()
 #            self.refreshPointSize()
+            self.deactivate_low_res_actor = False
             self.low_res_actor.VisibilityOn()  
             
     def getSphere(self):
@@ -422,8 +426,7 @@ class CPCPlot( DV3DPlot ):
 #             self.point_cloud_overview.stepTime( process=True, update_points=thresholding)
 
         thresholding = (self.process_mode == ProcessMode.Thresholding)
-        self.render_mode = ProcessMode.LowRes    
-        self.partitioned_point_cloud.clear()
+        self.setRenderMode( ProcessMode.LowRes )   
         self.point_cloud_overview.stepTime( process=True, update_points=thresholding)
         self.low_res_actor.VisibilityOn()                                    
         self.render() 
@@ -476,15 +479,14 @@ class CPCPlot( DV3DPlot ):
         return self.point_cloud_overview.point_collection.var.id 
     
     def processSlicingCommand( self, args, config_function = None ):  
-        print " Process Slicing Command: " , str( args )   
+#        print " Process Slicing Command: " , str( args )   
         sliceParam = config_function.value
         if args and args[0] == "StartConfig":            
-            self.render_mode = ProcessMode.LowRes    
-            self.partitioned_point_cloud.clear()
+            self.setRenderMode( ProcessMode.LowRes )   
             self.execCurrentSlice()   
             self.low_res_actor.VisibilityOn()                        
         elif args and args[0] == "Init":
-            axis_bounds = self.point_cloud_overview.getBounds()
+            axis_bounds = self.point_cloud_overview.getAxisBounds()
             config_function.initial_value = axis_bounds
             config_function.setRangeBounds( axis_bounds )
             sliceParam.setValue( 'bounds', [ [ axis_bounds[0], axis_bounds[1] ], [ axis_bounds[2], axis_bounds[3] ], [ axis_bounds[4], axis_bounds[5] ] ] )
@@ -493,7 +495,7 @@ class CPCPlot( DV3DPlot ):
         elif args and args[0] == "EndConfig":
             positions = sliceParam.getValue( 'spos' )
             positions[self.sliceAxisIndex] = sliceParam.getValue()
-            print "Update slice value[%d]: %f " % ( self.sliceAxisIndex, sliceParam.getValue() )
+#            print "Update slice value[%d]: %f " % ( self.sliceAxisIndex, sliceParam.getValue() )
             sliceParam.setValue( 'spos', positions )
             self.setRenderMode( ProcessMode.HighRes )            
             self.execCurrentSlice( )       
@@ -520,7 +522,7 @@ class CPCPlot( DV3DPlot ):
             self.execCurrentSlice(spos=value)
     
     def processThresholdRangeCommand( self, args, config_function = None ):
-        print " ---->>  processThresholdRangeCommand: %s[%d] " % ( args[0], self.thresholdCmdIndex )
+#        print " ---->>  processThresholdRangeCommand: %s[%d] " % ( args[0], self.cmdSkipIndex )
         volumeThresholdRange = config_function.value
         if args and args[0] == "StartConfig":
             if self.render_mode ==  ProcessMode.HighRes:
@@ -548,12 +550,13 @@ class CPCPlot( DV3DPlot ):
             self.enableThresholding(volumeThresholdRange)
         elif args and args[0] == "Close":
             isOK = args[1] if ( len( args ) > 1 ) else True
-            self.setRenderMode( ProcessMode.HighRes )
-            dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
-            if isOK: self.updateThresholding( dvar, volumeThresholdRange.getValue( dvar) )                
-            self.render()
+            if self.render_mode == ProcessMode.LowRes:
+                self.setRenderMode( ProcessMode.HighRes )
+                dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
+                if isOK: self.updateThresholding( dvar, volumeThresholdRange.getValue( dvar) )                
+                self.render()
         elif args and args[0] == "UpdateConfig":
-            if ( self.thresholdCmdIndex % self.thresholdingSkipFactor ) == 0:
+            if ( self.cmdSkipIndex % self.cmdSkipFactor ) == 0:
                 value = args[2].GetValue()
                 dvar = self.defvar[0] if ( type(self.defvar) == list ) else self.defvar
                 vt_range = list( volumeThresholdRange.getValue( dvar ) )
@@ -561,11 +564,11 @@ class CPCPlot( DV3DPlot ):
                 volumeThresholdRange.setValue( dvar, vt_range )
                 volumeThresholdRange.setValues( vt_range )
                 self.updateThresholding( dvar, vt_range, False )
-            self.thresholdCmdIndex = self.thresholdCmdIndex + 1
+            self.cmdSkipIndex = self.cmdSkipIndex + 1
                     
     def enableThresholding( self, volumeThresholdRange=None, **args ):
         self.updateTextDisplay( "Mode: Thresholding", True )
-        self.thresholdCmdIndex = 0
+        self.cmdSkipIndex = 0
         self.clearSubsetting()
         self.process_mode = ProcessMode.Thresholding 
 #         if self.render_mode ==  ProcessMode.LowRes:
@@ -633,7 +636,7 @@ class CPCPlot( DV3DPlot ):
             config_function = bbar.getConfigFunction( interactionState )
             spos = config_function.value.getValue()
         if normalized: 
-            axis_bounds = self.point_cloud_overview.getBounds()
+            axis_bounds = self.point_cloud_overview.getAxisBounds()
             sindex = 2*self.sliceAxisIndex 
             spos =  ( spos - axis_bounds[sindex]) / ( axis_bounds[sindex+1] - axis_bounds[sindex])   
         return spos
@@ -701,8 +704,8 @@ class CPCPlot( DV3DPlot ):
         if target <> None:
             subset_spec = ( target, trange[0], trange[1], normalized )
             self.current_subset_specs[target] = subset_spec
-            print " $$$$$$ Update Thresholding: Generated spec = %s, render mode = %d " % ( str( subset_spec ), self.render_mode )
-        else: print " Update Thresholding: render mode = %d " % ( self.render_mode )
+#            print " $$$$$$ Update Thresholding: Generated spec = %s, render mode = %d " % ( str( subset_spec ), self.render_mode )
+#        else: print " Update Thresholding: render mode = %d " % ( self.render_mode )
         self.invalidate()
         pc = self.getPointCloud()
         pc.generateSubset( spec=self.current_subset_specs )
@@ -906,16 +909,32 @@ class CPCPlot( DV3DPlot ):
     def processOpacityScalingCommand(self, args, config_function ):
         oscale = config_function.value
         oval = list( oscale.getValues() )
+        if args[0] == "Init":
+            ival = config_function.initial_value
+            colormapManager = self.getColormapManager()
+            colormapManager.setAlphaRange( ival )
+#            print "Set alpha init: ", str( ival )
         if args[0] == "InitConfig":
             self.updateTextDisplay( config_function.label )
         elif args[0] == "UpdateConfig": 
-            oval[ args[1] ] = args[2].GetValue()
-            oscale.setValues( oval )       
-        colormapManager = self.getColormapManager()
-        alpha_range = colormapManager.getAlphaRange()
-        if ( abs( oval[0] - alpha_range[0] ) > 0.1 ) or ( abs( oval[1] - alpha_range[0] ) > 0.1 ):
-            colormapManager.setAlphaRange( oval )
-            self.render()
+            if ( self.cmdSkipIndex % self.cmdSkipFactor ) == 0:
+                oval[ args[1] ] = args[2].GetValue()
+                oscale.setValues( oval )       
+                colormapManager = self.getColormapManager()
+                alpha_range = colormapManager.getAlphaRange()
+                if ( abs( oval[0] - alpha_range[0] ) > 0.1 ) or ( abs( oval[1] - alpha_range[0] ) > 0.1 ):
+                    colormapManager.setAlphaRange( oval )
+                    print "Set alpha range: ", str( oval )
+                    self.render()
+            self.cmdSkipIndex = self.cmdSkipIndex + 1
+        elif args[0] == "StartConfig":            
+            self.setRenderMode( ProcessMode.LowRes ) 
+            self.point_cloud_overview.generateSubset( spec=self.current_subset_specs )
+            self.cmdSkipIndex = 0  
+        elif args[0] == "EndConfig":            
+            self.setRenderMode( ProcessMode.HighRes ) 
+            self.partitioned_point_cloud.generateSubset( spec=self.current_subset_specs, allow_processing=True )
+            self.render()  
             
     def processOpacityGraphCommand(self, args=None ):
         colormapManager = self.getColormapManager()
@@ -970,6 +989,8 @@ class CPCPlot( DV3DPlot ):
     def processProjectionCommand( self, args, config_function  ): 
         if args and args[0] == "InitConfig": 
             self.toggleProjection( args, config_function )
+            self.setRenderMode( ProcessMode.HighRes )
+            self.render() 
                 
     def processSelectedProjection( self ):
         seleted_projection = self.projection.getValue('selected')
@@ -1181,7 +1202,7 @@ class CPCPlot( DV3DPlot ):
 #                text = ' '.join( [ "%s: (%f, %f )" % (rng_val[0], rng_val[1], rng_val[2] )  for rng_val in trngs.values() ] )
 #                text = " Thresholding Range[%d]: ( %.3f, %.3f )\n Colormap Range: %s " % ( pcIndex, trng[0], trng[1], str( self.scalarRange.getRange() ) )
 #                self.updateTextDisplay( text )
-            print " Subproc[%d]-. new Thresholding Data Available: %s " % ( pcIndex, str( pc.getThresholdingRanges() ) ); sys.stdout.flush()
+#            print " Subproc[%d]-. new Thresholding Data Available: %s " % ( pcIndex, str( pc.getThresholdingRanges() ) ); sys.stdout.flush()
     #        self.reset( ) # pcIndex )
             self.render() 
                           
@@ -1208,7 +1229,7 @@ class CPCPlot( DV3DPlot ):
         nInputPoints = self.point_cloud_overview.getNumberOfInputPoints()
         if ( n_subproc_points > nInputPoints ): n_subproc_points = nInputPoints
         nPartitions = int( round( min( nInputPoints / n_subproc_points, 10  ) ) )
-        nCollections = min( nPartitions, n_cores )
+        nCollections = min( nPartitions, n_cores-1 )
         print " Init PCViewer, nInputPoints = %d, n_overview_points = %d, n_subproc_points = %d, nCollections = %d, overview skip index = %s" % ( nInputPoints, n_overview_points, n_subproc_points, nCollections, self.point_cloud_overview.getSkipIndex() )
         self.initCollections( nCollections, init_args, lut = lut, maxStageHeight=self.maxStageHeight  )
         interface = init_args[2]
