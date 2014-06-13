@@ -363,6 +363,9 @@ class CPCPlot( DV3DPlot ):
             self.render()
 
     def toggleIsosurfaceVisibility( self, args, config_function ):
+        
+        return
+    
         if len( args ) > 1 and args[1]:
             if (len(args) > 3):
                 button_bar = args[3]

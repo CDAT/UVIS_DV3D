@@ -393,7 +393,7 @@ class DV3DPlot():
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
         b = bbar.addSliderButton( names=['ZSlider'],  key='z', toggle=True, group='SliceRoundRobin', sliderLabels='Z Slice Position', label="Slicing", position=[2,3], interactionHandler=self.processSlicingCommand )
         b.addFunctionKey( 'W', 1, Button.FuncToggleStateOff )
-#        b = bbar.addConfigButton( names=['ToggleSurfacePlot'],  key='S', children=['IsosurfaceValue'], toggle=True, interactionHandler=self.processSurfacePlotCommand )
+        b = bbar.addConfigButton( names=['ToggleSurfacePlot'],  key='S', children=['IsosurfaceValue'], toggle=True, interactionHandler=self.processSurfacePlotCommand )
         b = bbar.addConfigButton( names=['ToggleVolumePlot'], key='v', children=['ScaleTransferFunction'], toggle=True, interactionHandler=self.processVolumePlotCommand )
         bbar.build()
  
